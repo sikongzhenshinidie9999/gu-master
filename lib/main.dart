@@ -44,7 +44,7 @@ class SidequestApp extends ConsumerWidget {
     final themeMode = ref.watch(themeProvider);
 
     return MaterialApp(
-      title: 'Sidequest',
+      title: '蛊师修炼系统',
       debugShowCheckedModeBanner: false,
       themeMode: themeMode,
       theme: _buildTheme(Brightness.light),

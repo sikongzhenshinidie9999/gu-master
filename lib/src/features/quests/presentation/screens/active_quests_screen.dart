@@ -16,7 +16,7 @@ class ActiveQuestsScreen extends ConsumerWidget {
     final activeQuests = questState.activeQuests;
 
     if (activeQuests.isEmpty) {
-      return const Center(child: Text("No active quests. Go to the board!"));
+      return const Center(child: Text("暂无修炼中的任务，去任务板看看吧"));
     }
 
     return AnimationLimiter(
@@ -171,7 +171,7 @@ class _ActiveQuestItemState extends ConsumerState<_ActiveQuestItem> {
                 ref.read(questProvider.notifier).completeQuest(widget.quest);
               },
               icon: const Icon(Icons.check_circle_outline_rounded),
-              label: const Text("Complete Quest"),
+              label: const Text("完成修炼"),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.green,
                 foregroundColor: Colors.white,

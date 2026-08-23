@@ -36,7 +36,7 @@ class TheBoardScreen extends ConsumerWidget {
              return const Center(
                child: Padding(
                  padding: EdgeInsets.only(top: 40),
-                 child: Text("No quests available. Check back tomorrow!"),
+                 child: Text("今日修炼任务已领完，明日再来"),
                ),
              );
           }
@@ -78,7 +78,7 @@ class _BoardHeader extends StatelessWidget {
             color: canShuffle ? Theme.of(context).colorScheme.primary : Colors.grey,
           ),
           label: Text(
-            canShuffle ? "Shuffle Quests" : "Shuffled Today",
+            canShuffle ? "更换修炼任务" : "今日已更换",
             style: TextStyle(
               color: canShuffle ? Theme.of(context).colorScheme.primary : Colors.grey,
               fontWeight: FontWeight.bold,
@@ -152,7 +152,7 @@ class _CountdownTimerState extends State<_CountdownTimer> {
           Icon(Icons.access_time_rounded, size: 14, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7)),
           const SizedBox(width: 6),
           Text(
-            "${hours}h ${minutes}m left",
+            "距刷新 ${hours}h ${minutes}m",
             style: TextStyle(
               fontSize: 12, 
               fontWeight: FontWeight.w600,
@@ -260,7 +260,7 @@ class _QuestCard extends StatelessWidget {
                       ref.read(questProvider.notifier).acceptQuest(quest);
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: const Text('Quest Accepted!'),
+                          content: const Text('已接取修炼任务'),
                           behavior: SnackBarBehavior.floating,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                           margin: const EdgeInsets.all(16),
@@ -280,7 +280,7 @@ class _QuestCard extends StatelessWidget {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                     ),
                     child: Text(
-                      'ACCEPT', 
+                      '接取', 
                       style: GoogleFonts.outfit(
                         fontWeight: FontWeight.bold,
                         letterSpacing: 2.0,
@@ -347,22 +347,22 @@ class _TierBadge extends StatelessWidget {
     switch (tier) {
       case 1:
         color = Colors.green;
-        text = 'TIER I';
+        text = '一阶';
         xp = 10;
         break;
       case 2:
         color = Colors.orange;
-        text = 'TIER II';
+        text = '二阶';
         xp = 25;
         break;
       case 3:
         color = Colors.red;
-        text = 'TIER III';
+        text = '三阶';
         xp = 50;
         break;
       default:
         color = Colors.grey;
-        text = 'TIER I';
+        text = '一阶';
         xp = 10;
     }
 
@@ -394,7 +394,7 @@ class _TierBadge extends StatelessWidget {
             color: color.withValues(alpha: 0.3),
           ),
           Text(
-            '+${xp}XP',
+            '+$xp修为',
             style: TextStyle(
               color: color,
               fontSize: 10,

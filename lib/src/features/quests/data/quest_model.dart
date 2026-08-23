@@ -59,19 +59,18 @@ class QuestModel extends HiveObject {
 
   IconData get icon {
     switch (category.toLowerCase()) {
-      case 'fitness':
-        return Icons.directions_run_rounded;
-      case 'knowledge':
-        return Icons.auto_stories_rounded;
-      case 'social':
-        return Icons.people_rounded;
-      case 'chore':
-      case 'chores':
-        return Icons.cleaning_services_rounded;
-      case 'mindfulness':
+      case '炼体':
+        return Icons.fitness_center_rounded;
+      case '炼气':
+        return Icons.air_rounded;
+      case '炼神':
         return Icons.self_improvement_rounded;
-      case 'creativity':
-        return Icons.brush_rounded;
+      case '炼蛊':
+        return Icons.bug_report_rounded;
+      case '悟道':
+        return Icons.auto_awesome_rounded;
+      case '杂务':
+        return Icons.cleaning_services_rounded;
       default:
         // Fallback for any old data or unmapped categories
         return Icons.star_rounded;
@@ -80,19 +79,18 @@ class QuestModel extends HiveObject {
   
   Color get categoryColor {
     switch (category.toLowerCase()) {
-      case 'fitness':
+      case '炼体':
         return Colors.redAccent;
-      case 'knowledge':
-        return Colors.blueAccent;
-      case 'social':
-        return Colors.purpleAccent;
-      case 'chore':
-      case 'chores':
+      case '炼气':
+        return Colors.lightBlueAccent;
+      case '炼神':
+        return Colors.deepPurpleAccent;
+      case '炼蛊':
+        return Colors.greenAccent;
+      case '悟道':
+        return Colors.amberAccent;
+      case '杂务':
         return Colors.orangeAccent;
-      case 'mindfulness':
-        return Colors.tealAccent;
-      case 'creativity':
-        return Colors.pinkAccent;
       default:
         return Colors.grey;
     }

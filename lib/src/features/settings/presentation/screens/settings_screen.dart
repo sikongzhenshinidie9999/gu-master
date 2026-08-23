@@ -91,7 +91,7 @@ class SettingsScreen extends ConsumerWidget {
                       const SizedBox(height: 16),
                       SwitchListTile.adaptive(
                         title: const Text("Enable Notifications"),
-                        subtitle: const Text("Daily summons at 9 AM & 9 PM"),
+                        subtitle: const Text("每日修炼提醒（9:00 与 21:00）"),
                         value: settingsState.notificationsEnabled,
                         onChanged: (val) => ref.read(settingsProvider.notifier).toggleNotifications(val),
                         contentPadding: EdgeInsets.zero,
@@ -145,7 +145,7 @@ class SettingsScreen extends ConsumerWidget {
                 const SizedBox(height: 32),
                 Center(
                   child: Text(
-                    'Sidequest v1.0.0',
+                    '蛊师修炼系统 v1.0.0',
                     style: TextStyle(color: Colors.grey.withValues(alpha: 0.5)),
                   ),
                 ),

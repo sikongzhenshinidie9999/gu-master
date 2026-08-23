@@ -63,17 +63,17 @@ class _NavScaffoldState extends State<NavScaffold> {
           BottomNavigationBarItem(
             icon: Icon(CupertinoIcons.square_list),
             activeIcon: Icon(CupertinoIcons.square_list_fill),
-            label: 'Board',
+            label: '修炼任务',
           ),
           BottomNavigationBarItem(
             icon: Icon(CupertinoIcons.compass),
             activeIcon: Icon(CupertinoIcons.compass_fill),
-            label: 'Active',
+            label: '修炼中',
           ),
           BottomNavigationBarItem(
             icon: Icon(CupertinoIcons.graph_circle),
             activeIcon: Icon(CupertinoIcons.graph_circle_fill),
-            label: 'Legacy',
+            label: '修炼成果',
           ),
         ],
       ),

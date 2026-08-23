@@ -146,36 +146,42 @@ class QuestNotifier extends StateNotifier<QuestState> {
 
     if (tier == 1) {
       pool = [
-        {'title': 'Drink Water', 'desc': 'Drink one glass of water.', 'cat': 'Fitness'},
-        {'title': 'Read 1 Page', 'desc': 'Read one page of a book.', 'cat': 'Knowledge'},
-        {'title': 'Deep Breath', 'desc': 'Take 5 deep breaths.', 'cat': 'Mindfulness'},
-        {'title': 'Make Bed', 'desc': 'Make your bed neatly.', 'cat': 'Chore'},
-        {'title': 'Water Plants', 'desc': 'Check and water your plants.', 'cat': 'Chore'},
-        {'title': 'Learn Word', 'desc': 'Learn one new word.', 'cat': 'Knowledge'},
-        {'title': 'Text Friend', 'desc': 'Send a nice text to a friend.', 'cat': 'Social'},
-        {'title': 'Stand Up', 'desc': 'Stand up and stretch for 1 min.', 'cat': 'Fitness'},
+        {'title': '打坐静心 15 分钟', 'desc': '静下心来，感受体内气息流转。', 'cat': '炼神'},
+        {'title': '早起修炼', 'desc': '清晨起床后先运转一小段功法。', 'cat': '炼气'},
+        {'title': '活动筋骨 10 分钟', 'desc': '简单拉伸活动，唤醒身体。', 'cat': '炼体'},
+        {'title': '阅读一章书', 'desc': '读一章功法典籍或闲书。', 'cat': '悟道'},
+        {'title': '清理修炼洞府', 'desc': '把修炼环境收拾干净。', 'cat': '杂务'},
+        {'title': '学习一项新知识', 'desc': '学一个以前不懂的小知识。', 'cat': '悟道'},
+        {'title': '睡前静心', 'desc': '睡前静坐五分钟，平复心神。', 'cat': '炼神'},
+        {'title': '完成今日最重要的一项事情', 'desc': '今天最要紧的一件事，先做完它。', 'cat': '杂务'},
+        {'title': '给蛊虫喂食', 'desc': '照料一下你养的蛊虫。', 'cat': '炼蛊'},
+        {'title': '散步吐纳', 'desc': '散步时配合呼吸吐纳。', 'cat': '炼气'},
       ];
     } else if (tier == 2) {
       pool = [
-        {'title': '20m Walk', 'desc': 'Go for a 20-minute walk.', 'cat': 'Fitness'},
-        {'title': 'Organize Desk', 'desc': 'Clear and organize your workspace.', 'cat': 'Chore'},
-        {'title': 'Call Parents', 'desc': 'Call a parent or relative.', 'cat': 'Social'},
-        {'title': 'Meditate 10m', 'desc': 'Meditate for 10 minutes.', 'cat': 'Mindfulness'},
-        {'title': 'Cook Meal', 'desc': 'Cook a simple meal.', 'cat': 'Creativity'},
-        {'title': 'Write Journal', 'desc': 'Write half a page.', 'cat': 'Mindfulness'},
-        {'title': 'Read Chapter', 'desc': 'Read one full chapter.', 'cat': 'Knowledge'},
-        {'title': 'No Socials', 'desc': 'No social media for 2 hours.', 'cat': 'Mindfulness'},
+        {'title': '研读功法 20 分钟', 'desc': '认真研读功法典籍二十分钟。', 'cat': '悟道'},
+        {'title': '运转功法三周天', 'desc': '完整运转功法三个周天。', 'cat': '炼气'},
+        {'title': '锻炼体魄 30 分钟', 'desc': '进行三十分钟的体能修炼。', 'cat': '炼体'},
+        {'title': '打坐入定 30 分钟', 'desc': '进入较深的静定状态。', 'cat': '炼神'},
+        {'title': '整理今日修炼心得', 'desc': '把今日修炼感悟写成笔记。', 'cat': '悟道'},
+        {'title': '喂养蛊虫并观察状态', 'desc': '记录蛊虫今日的变化。', 'cat': '炼蛊'},
+        {'title': '彻底清扫洞府', 'desc': '对修炼洞府做一次大扫除。', 'cat': '杂务'},
+        {'title': '复盘今日修炼成果', 'desc': '回顾今天的修炼进度与得失。', 'cat': '悟道'},
+        {'title': '观想气息归入丹田', 'desc': '冥想观想，气息归元。', 'cat': '炼神'},
+        {'title': '熬炼药浴强身', 'desc': '准备并泡一次药浴，强健体魄。', 'cat': '炼体'},
       ];
     } else { // Tier 3
       pool = [
-        {'title': 'Run 5km', 'desc': 'Run 5 kilometers.', 'cat': 'Fitness'},
-        {'title': 'Cold Shower', 'desc': 'Take a 3-minute cold shower.', 'cat': 'Fitness'},
-        {'title': 'Read 1 Hour', 'desc': 'Read for 60 minutes.', 'cat': 'Knowledge'},
-        {'title': 'Volunteer', 'desc': 'Help someone for an hour.', 'cat': 'Social'},
-        {'title': 'Deep Clean', 'desc': 'Deep clean one entire room.', 'cat': 'Chore'},
-        {'title': 'Create Art', 'desc': 'Spend 1 hour on a hobby.', 'cat': 'Creativity'},
-        {'title': 'Screen Fast', 'desc': 'No screens after 8 PM.', 'cat': 'Mindfulness'},
-        {'title': 'Study Topic', 'desc': 'Study a new topic for 1 hour.', 'cat': 'Knowledge'},
+        {'title': '闭关修炼一小时', 'desc': '排除干扰，持续修炼一个小时。', 'cat': '炼气'},
+        {'title': '高强度炼体 60 分钟', 'desc': '完成一次高强度的体能修炼。', 'cat': '炼体'},
+        {'title': '深度观想 45 分钟', 'desc': '长时间保持深度冥想状态。', 'cat': '炼神'},
+        {'title': '炼制一份蛊毒', 'desc': '按配方炼制一份蛊毒或蛊引。', 'cat': '炼蛊'},
+        {'title': '参悟上乘功法', 'desc': '静心参悟一篇上乘功法。', 'cat': '悟道'},
+        {'title': '深度复盘与规划', 'desc': '系统复盘本周修炼并制定计划。', 'cat': '悟道'},
+        {'title': '洞府全面修整', 'desc': '全面修缮、布置你的修炼洞府。', 'cat': '杂务'},
+        {'title': '炼化蛊虫精元', 'desc': '尝试炼化一只蛊虫的精元。', 'cat': '炼蛊'},
+        {'title': '断网一日清修', 'desc': '一整天不使用电子产品，清修养神。', 'cat': '炼神'},
+        {'title': '长途跋涉采药', 'desc': '外出采药，锻炼体魄与意志。', 'cat': '炼体'},
       ];
     }
 

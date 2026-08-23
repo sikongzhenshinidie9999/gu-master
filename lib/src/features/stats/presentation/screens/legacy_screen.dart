@@ -22,7 +22,7 @@ class LegacyScreen extends ConsumerWidget {
           _buildWeeklyProgress(context, questState.weeklyHistory),
           const SizedBox(height: 24),
           Text(
-            "Quest History",
+            "修炼记录",
             style: GoogleFonts.outfit(
               fontSize: 20,
               fontWeight: FontWeight.bold,
@@ -41,7 +41,7 @@ class LegacyScreen extends ConsumerWidget {
       child: Column(
         children: [
           Text(
-            "TOTAL XP",
+            "总修为",
             style: TextStyle(
               fontSize: 12, 
               fontWeight: FontWeight.w900,
@@ -72,7 +72,7 @@ class LegacyScreen extends ConsumerWidget {
                 Icon(Icons.star_rounded, size: 16, color: Colors.amber),
                 SizedBox(width: 6),
                 Text(
-                  "NOVICE ADVENTURER",
+                  "凡人",
                   style: TextStyle(
                     fontSize: 11, 
                     color: Colors.amber, 
@@ -102,7 +102,7 @@ class LegacyScreen extends ConsumerWidget {
               Icon(Icons.date_range_rounded, size: 20),
               SizedBox(width: 8),
               Text(
-                "Weekly Progress",
+                "本周修炼",
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
               ),
             ],
@@ -188,7 +188,7 @@ class LegacyScreen extends ConsumerWidget {
               Icon(Icons.history_edu_rounded, size: 48, color: Colors.grey.withValues(alpha: 0.3)),
               const SizedBox(height: 16),
               const Text(
-                "Your legacy begins today.",
+                "你的修炼之路，从今日开始。",
                 style: TextStyle(color: Colors.grey),
               ),
             ],
@@ -246,7 +246,7 @@ class LegacyScreen extends ConsumerWidget {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  "+${quest.xpReward} XP",
+                  "+${quest.xpReward} 修为",
                   style: const TextStyle(
                     fontWeight: FontWeight.w800,
                     color: Colors.green,
