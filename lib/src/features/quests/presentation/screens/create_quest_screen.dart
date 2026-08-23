@@ -18,7 +18,7 @@ class _CreateQuestScreenState extends ConsumerState<CreateQuestScreen> {
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
 
-  static const List<String> _categories = ['炼体', '炼气', '炼神', '炼蛊', '悟道', '杂务'];
+  static const List<String> _categories = ['炼体', '炼神', '炼蛊', '悟道', '杂务'];
 
   String? _category;
   int? _tier;

@@ -308,7 +308,7 @@ void main() {
         id: 'custom_legacy',
         title: '旧任务',
         description: '旧描述',
-        category: '炼气',
+        category: '炼体',
         tier: 3,
         createdAt: DateTime.now().subtract(const Duration(days: 1)),
       );
@@ -321,7 +321,7 @@ void main() {
       expect(templates.length, 1);
       final t = Map<String, dynamic>.from(templates.first as Map);
       expect(t['title'], '旧任务');
-      expect(t['category'], '炼气');
+      expect(t['category'], '炼体');
       expect(t['tier'], 3);
 
       final customs = notifier.state.availableQuests.where((q) => q.id.startsWith('custom_')).toList();
