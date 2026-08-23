@@ -6,6 +6,7 @@ import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import '../../logic/quest_provider.dart';
 import '../../data/quest_model.dart';
 import 'package:sidequest/src/features/stats/logic/realm.dart';
+import 'package:sidequest/src/shared/widgets/app_snackbar.dart';
 import 'package:sidequest/src/shared/widgets/glass_card.dart';
 
 class ActiveQuestsScreen extends ConsumerWidget {
@@ -21,16 +22,8 @@ class ActiveQuestsScreen extends ConsumerWidget {
       questProvider.select((state) => state.lastBreakthrough),
       (previous, next) {
         if (next == null) return;
-        ScaffoldMessenger.of(context)
-          ..hideCurrentSnackBar()
-          ..showSnackBar(
-            SnackBar(
-              content: Text(
-                '🎉 境界突破！\n${next.fromName} → ${next.toName}\n修为 +${next.gainedXp}',
-              ),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
+        showAppSnackBar(context,
+            '🎉 境界突破！\n${next.fromName} → ${next.toName}\n修为 +${next.gainedXp}');
         // 显示后立即清除，避免重复触发
         final notifier = ref.read(questProvider.notifier);
         Future.microtask(() => notifier.clearLastBreakthrough());

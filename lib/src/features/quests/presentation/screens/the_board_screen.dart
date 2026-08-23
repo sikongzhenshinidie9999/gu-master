@@ -5,7 +5,9 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import '../../logic/quest_provider.dart';
 import '../../data/quest_model.dart';
+import 'package:sidequest/src/shared/widgets/app_snackbar.dart';
 import 'package:sidequest/src/shared/widgets/glass_card.dart';
+import 'create_quest_screen.dart';
 
 class TheBoardScreen extends ConsumerWidget {
   const TheBoardScreen({super.key});
@@ -28,6 +30,12 @@ class TheBoardScreen extends ConsumerWidget {
             return _BoardHeader(
               canShuffle: questState.canShuffle,
               onShuffle: () => ref.read(questProvider.notifier).shuffleQuests(),
+              onCreateTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const CreateQuestScreen()),
+                );
+              },
             );
           }
           
@@ -61,35 +69,61 @@ class TheBoardScreen extends ConsumerWidget {
 class _BoardHeader extends StatelessWidget {
   final bool canShuffle;
   final VoidCallback onShuffle;
+  final VoidCallback onCreateTap;
 
-  const _BoardHeader({required this.canShuffle, required this.onShuffle});
+  const _BoardHeader({
+    required this.canShuffle,
+    required this.onShuffle,
+    required this.onCreateTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return Wrap(
+      alignment: WrapAlignment.spaceBetween,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: 8,
+      runSpacing: 8,
       children: [
         const _CountdownTimer(),
-        TextButton.icon(
-          onPressed: canShuffle ? onShuffle : null,
-          icon: Icon(
-            Icons.shuffle_rounded, 
-            size: 18,
-            color: canShuffle ? Theme.of(context).colorScheme.primary : Colors.grey,
-          ),
-          label: Text(
-            canShuffle ? "更换修炼任务" : "今日已更换",
-            style: TextStyle(
-              color: canShuffle ? Theme.of(context).colorScheme.primary : Colors.grey,
-              fontWeight: FontWeight.bold,
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextButton.icon(
+              onPressed: onCreateTap,
+              icon: const Icon(Icons.add_circle_outline_rounded, size: 18),
+              label: const Text(
+                "创建修炼任务",
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              style: TextButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.surface.withValues(alpha: 0.5),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              ),
             ),
-          ),
-          style: TextButton.styleFrom(
-            backgroundColor: canShuffle 
-                ? Theme.of(context).colorScheme.surface.withValues(alpha: 0.5) 
-                : Colors.transparent,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          ),
+            const SizedBox(width: 8),
+            TextButton.icon(
+              onPressed: canShuffle ? onShuffle : null,
+              icon: Icon(
+                Icons.shuffle_rounded,
+                size: 18,
+                color: canShuffle ? Theme.of(context).colorScheme.primary : Colors.grey,
+              ),
+              label: Text(
+                canShuffle ? "更换修炼任务" : "今日已更换",
+                style: TextStyle(
+                  color: canShuffle ? Theme.of(context).colorScheme.primary : Colors.grey,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              style: TextButton.styleFrom(
+                backgroundColor: canShuffle
+                    ? Theme.of(context).colorScheme.surface.withValues(alpha: 0.5)
+                    : Colors.transparent,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              ),
+            ),
+          ],
         ),
       ],
     );
@@ -258,14 +292,7 @@ class _QuestCard extends StatelessWidget {
                   return OutlinedButton(
                     onPressed: () {
                       ref.read(questProvider.notifier).acceptQuest(quest);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: const Text('已接取修炼任务'),
-                          behavior: SnackBarBehavior.floating,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          margin: const EdgeInsets.all(16),
-                        ),
-                      );
+                      showAppSnackBar(context, '已接取修炼任务');
                     },
                     style: OutlinedButton.styleFrom(
                       backgroundColor: Theme.of(context).brightness == Brightness.dark 

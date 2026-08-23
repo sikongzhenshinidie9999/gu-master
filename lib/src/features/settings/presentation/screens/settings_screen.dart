@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:sidequest/src/shared/widgets/app_snackbar.dart';
 import 'package:sidequest/src/shared/widgets/glass_card.dart';
 import '../../logic/settings_provider.dart';
 import 'package:sidequest/src/features/quests/logic/quest_provider.dart';
@@ -174,9 +175,7 @@ class SettingsScreen extends ConsumerWidget {
             onPressed: () {
               ref.read(questProvider.notifier).wipeAllData();
               Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text("All data has been wiped.")),
-              );
+              showAppSnackBar(context, 'All data has been wiped.');
             },
             style: TextButton.styleFrom(foregroundColor: Colors.red),
             child: const Text("Wipe Data"),

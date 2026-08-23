@@ -10,6 +10,35 @@ final questBoxProvider = Provider<Box<QuestModel>>((ref) {
   throw UnimplementedError('questBoxProvider not initialized');
 });
 
+/// 判断是否为用户自定义任务（约定：id 以 custom_ 前缀区分，不占用任何 Hive 字段）。
+bool _isCustomQuest(QuestModel quest) => quest.id.startsWith('custom_');
+
+/// 两个自定义任务模板内容是否相同（title/description/category/tier 全等）。
+bool _sameTemplateContent(Map<String, dynamic> a, Map<String, dynamic> b) =>
+    a['title'] == b['title'] &&
+    a['description'] == b['description'] &&
+    a['category'] == b['category'] &&
+    a['tier'] == b['tier'];
+
+/// 任务实例内容是否与模板一致（模板与每日实例的稳定对应规则）。
+bool _questMatchesTemplate(QuestModel quest, Map<String, dynamic> template) =>
+    quest.title == template['title'] &&
+    quest.description == template['description'] &&
+    quest.category == template['category'] &&
+    quest.tier == template['tier'];
+
+/// 从 stats Box 读取自定义任务模板列表（缺省为空列表）。
+List<Map<String, dynamic>> _readCustomTemplates(Box<dynamic> statsBox) {
+  final raw = statsBox.get('customQuestTemplates');
+  if (raw is! List) return [];
+  return raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+}
+
+/// 保存自定义任务模板列表到 stats Box。
+void _saveCustomTemplates(Box<dynamic> statsBox, List<Map<String, dynamic>> templates) {
+  statsBox.put('customQuestTemplates', templates);
+}
+
 // --- State Definitions ---
 class QuestState {
   final List<QuestModel> availableQuests;
@@ -107,8 +136,14 @@ class QuestNotifier extends StateNotifier<QuestState> {
     if (!_isSameDay(lastRefresh, now) || available.isEmpty) {
       _refreshDailyQuests(available);
       statsBox.put('lastRefresh', now);
-      // Reset shuffle availability on new day
-      state = state.copyWith(canShuffle: true);
+      // 刷新后重新计算 active / completed：
+      // - 昨日已完成任务保留为历史
+      // - 昨日 active 的自定义任务不残留（已在刷新中清理）
+      state = state.copyWith(
+        activeQuests: box.values.where((q) => q.isActive).toList(),
+        completedQuests: box.values.where((q) => q.isCompleted).toList(),
+        canShuffle: true,
+      );
     } else {
       state = state.copyWith(
         availableQuests: available,
@@ -121,11 +156,90 @@ class QuestNotifier extends StateNotifier<QuestState> {
     _checkExpiredQuests();
   }
 
-  void _refreshDailyQuests(List<QuestModel> currentAvailable) {
-    for (var q in currentAvailable) {
-      q.delete();
+  /// 创建用户自定义修炼任务（复用现有 QuestModel 与 quests Box）。
+  /// 同时把任务作为「每日自定义任务模板」保存到 stats Box。
+  void createCustomQuest({
+    required String title,
+    required String description,
+    required String category,
+    required int tier,
+  }) {
+    final template = <String, dynamic>{
+      'title': title,
+      'description': description,
+      'category': category,
+      'tier': tier,
+    };
+
+    // 模板去重：相同内容（title/description/category/tier）只保存一份
+    final templates = _readCustomTemplates(statsBox);
+    final hasTemplate = templates.any((t) => _sameTemplateContent(t, template));
+    if (!hasTemplate) {
+      templates.add(template);
+      _saveCustomTemplates(statsBox, templates);
     }
 
+    // 同一天同一模板最多一个实例，避免重复创建
+    final now = DateTime.now();
+    final hasTodayInstance = box.values.any((q) =>
+        _isCustomQuest(q) &&
+        _isSameDay(q.createdAt, now) &&
+        _questMatchesTemplate(q, template));
+    if (hasTodayInstance) return;
+
+    final quest = QuestModel(
+      id: 'custom_${const Uuid().v4()}',
+      title: title,
+      description: description,
+      tier: tier,
+      createdAt: now,
+      category: category,
+    );
+
+    box.add(quest);
+    state = state.copyWith(
+      availableQuests: [...state.availableQuests, quest],
+    );
+  }
+
+  void _refreshDailyQuests(List<QuestModel> currentAvailable) {
+    final now = DateTime.now();
+    final templates = _readCustomTemplates(statsBox);
+
+    // 兼容回填：stats Box 中没有模板但存在旧版 custom_ 任务时，从旧任务提取模板
+    if (templates.isEmpty) {
+      final legacyCustoms = box.values.where(_isCustomQuest).toList();
+      if (legacyCustoms.isNotEmpty) {
+        for (final q in legacyCustoms) {
+          final t = <String, dynamic>{
+            'title': q.title,
+            'description': q.description,
+            'category': q.category,
+            'tier': q.tier,
+          };
+          if (!templates.any((e) => _sameTemplateContent(e, t))) {
+            templates.add(t);
+          }
+        }
+        _saveCustomTemplates(statsBox, templates);
+      }
+    }
+
+    // 清理旧自定义实例：非今日且未完成的一律删除（昨日已完成保留为历史）
+    for (final q in box.values.where(_isCustomQuest).toList()) {
+      if (!_isSameDay(q.createdAt, now) && !q.isCompleted) {
+        q.delete();
+      }
+    }
+
+    // 删除旧的 available 系统任务
+    for (final q in currentAvailable) {
+      if (!_isCustomQuest(q)) {
+        q.delete();
+      }
+    }
+
+    // 系统任务保持原规则：tier1 × 2 / tier2 × 2 / tier3 × 2
     final newQuests = [
       _generateQuest(tier: 1),
       _generateQuest(tier: 1),
@@ -134,9 +248,38 @@ class QuestNotifier extends StateNotifier<QuestState> {
       _generateQuest(tier: 3),
       _generateQuest(tier: 3),
     ];
-    
     box.addAll(newQuests);
-    state = state.copyWith(availableQuests: newQuests);
+
+    // 为每个模板确保「今日实例」存在（不存在才创建，避免重复）
+    for (final t in templates) {
+      final hasToday = box.values.any((q) =>
+          _isCustomQuest(q) &&
+          _isSameDay(q.createdAt, now) &&
+          _questMatchesTemplate(q, t));
+      if (!hasToday) {
+        final quest = QuestModel(
+          id: 'custom_${const Uuid().v4()}',
+          title: t['title'] as String,
+          description: t['description'] as String,
+          tier: t['tier'] as int,
+          createdAt: now,
+          category: t['category'] as String,
+        );
+        box.add(quest);
+      }
+    }
+
+    // 今日可用自定义任务（未接受、未完成、未失败）
+    final todayCustoms = box.values
+        .where((q) =>
+            _isCustomQuest(q) &&
+            _isSameDay(q.createdAt, now) &&
+            q.acceptedAt == null &&
+            !q.isCompleted &&
+            !q.isFailed)
+        .toList();
+
+    state = state.copyWith(availableQuests: [...todayCustoms, ...newQuests]);
   }
 
   void shuffleQuests() {
