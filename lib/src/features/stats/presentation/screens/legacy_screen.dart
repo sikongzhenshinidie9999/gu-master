@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:sidequest/src/features/quests/logic/quest_provider.dart';
+import 'package:sidequest/src/features/stats/logic/realm.dart';
 import 'package:sidequest/src/shared/widgets/glass_card.dart';
 import 'package:intl/intl.dart';
 
@@ -36,6 +37,9 @@ class LegacyScreen extends ConsumerWidget {
   }
 
   Widget _buildHeroStats(BuildContext context, int totalXp) {
+    final realm = getRealmProgress(totalXp);
+    final needNext = realm.isMaxRealm ? 0 : (realm.nextThreshold! - totalXp);
+
     return GlassCard(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -66,14 +70,14 @@ class LegacyScreen extends ConsumerWidget {
               borderRadius: BorderRadius.circular(20),
               border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
             ),
-            child: const Row(
+            child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.star_rounded, size: 16, color: Colors.amber),
-                SizedBox(width: 6),
+                const Icon(Icons.star_rounded, size: 16, color: Colors.amber),
+                const SizedBox(width: 6),
                 Text(
-                  "凡人",
-                  style: TextStyle(
+                  realm.name,
+                  style: const TextStyle(
                     fontSize: 11, 
                     color: Colors.amber, 
                     fontWeight: FontWeight.w800,
@@ -81,6 +85,26 @@ class LegacyScreen extends ConsumerWidget {
                   ),
                 ),
               ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: LinearProgressIndicator(
+              value: realm.progress,
+              minHeight: 8,
+              backgroundColor: Colors.amber.withValues(alpha: 0.15),
+              valueColor: const AlwaysStoppedAnimation<Color>(Colors.amber),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            realm.isMaxRealm
+                ? "已达最高境界"
+                : "距离 ${realm.nextName} 还需 $needNext 修为",
+            style: TextStyle(
+              fontSize: 12,
+              color: Theme.of(context).textTheme.bodySmall?.color?.withValues(alpha: 0.7),
             ),
           ),
         ],
