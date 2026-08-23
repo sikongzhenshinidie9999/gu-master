@@ -476,4 +476,101 @@ void main() {
       expect(statsBox.get('customQuestTemplates'), isNull);
     });
   });
+
+  group('永久删除自定义任务', () {
+    test('永久删除：实例消失且对应模板从 stats Box 删除', () {
+      final notifier = newNotifier();
+      notifier.createCustomQuest(title: '甲', description: 'a', category: '炼体', tier: 1);
+      notifier.createCustomQuest(title: '乙', description: 'b', category: '悟道', tier: 2);
+      final customs = notifier.state.availableQuests
+          .where((q) => q.id.startsWith('custom_')).toList();
+      final a = customs.firstWhere((q) => q.title == '甲');
+      final aId = a.id;
+
+      notifier.permanentlyDeleteCustomQuest(a);
+
+      expect(questBox.values.where((q) => q.id == aId), isEmpty);
+      expect(notifier.state.availableQuests.where((q) => q.id == aId), isEmpty);
+      final templates = statsBox.get('customQuestTemplates') as List;
+      expect(templates.length, 1);
+      final t = Map<String, dynamic>.from(templates.first as Map);
+      expect(t['title'], '乙');
+    });
+
+    test('永久删除后同日 Shuffle 不复活', () {
+      final notifier = newNotifier();
+      notifier.createCustomQuest(title: '丙', description: 'c', category: '炼神', tier: 1);
+      final custom = notifier.state.availableQuests.last;
+      notifier.permanentlyDeleteCustomQuest(custom);
+
+      expect(notifier.state.canShuffle, isTrue);
+      notifier.shuffleQuests();
+      expect(questBox.values.where((q) => q.id.startsWith('custom_')), isEmpty);
+      expect(notifier.state.availableQuests.where((q) => q.id.startsWith('custom_')), isEmpty);
+    });
+
+    test('永久删除后第二天不再生成', () async {
+      final notifier = newNotifier();
+      notifier.createCustomQuest(title: '丁', description: 'd', category: '杂务', tier: 1);
+      final custom = notifier.state.availableQuests.last;
+      notifier.permanentlyDeleteCustomQuest(custom);
+
+      await statsBox.put('lastRefresh', DateTime.now().subtract(const Duration(days: 2)));
+      final notifier2 = QuestNotifier(questBox, statsBox, settingsBox);
+      expect(notifier2.state.availableQuests.where((q) => q.id.startsWith('custom_')), isEmpty);
+      expect(questBox.values.where((q) => q.id.startsWith('custom_')), isEmpty);
+    });
+
+    test('永久删除不影响其他自定义模板', () async {
+      final notifier = newNotifier();
+      notifier.createCustomQuest(title: 'X', description: 'x', category: '炼体', tier: 1);
+      notifier.createCustomQuest(title: 'Y', description: 'y', category: '悟道', tier: 2);
+      final customs = notifier.state.availableQuests
+          .where((q) => q.id.startsWith('custom_')).toList();
+      final x = customs.firstWhere((q) => q.title == 'X');
+      notifier.permanentlyDeleteCustomQuest(x);
+
+      await statsBox.put('lastRefresh', DateTime.now().subtract(const Duration(days: 2)));
+      final notifier2 = QuestNotifier(questBox, statsBox, settingsBox);
+      final remaining = notifier2.state.availableQuests
+          .where((q) => q.id.startsWith('custom_')).toList();
+      expect(remaining.length, 1);
+      expect(remaining.first.title, 'Y');
+    });
+
+    test('系统任务调用永久删除退化为普通删除，模板不受影响', () {
+      final notifier = newNotifier();
+      notifier.createCustomQuest(title: 'Z', description: 'z', category: '炼蛊', tier: 1);
+      final system = notifier.state.availableQuests
+          .firstWhere((q) => !q.id.startsWith('custom_'));
+      final systemId = system.id;
+
+      notifier.permanentlyDeleteCustomQuest(system);
+
+      expect(questBox.values.where((q) => q.id == systemId), isEmpty);
+      final templates = statsBox.get('customQuestTemplates') as List;
+      expect(templates.length, 1);
+
+      notifier.shuffleQuests();
+      final systemAfter =
+          notifier.state.availableQuests.where((q) => !q.id.startsWith('custom_')).toList();
+      expect(systemAfter.length, 6);
+    });
+
+    test('永久删除后重新创建相同内容视为新模板，可每日生成', () async {
+      final notifier = newNotifier();
+      notifier.createCustomQuest(title: '重', description: '新', category: '炼体', tier: 1);
+      final custom = notifier.state.availableQuests.last;
+      notifier.permanentlyDeleteCustomQuest(custom);
+
+      notifier.createCustomQuest(title: '重', description: '新', category: '炼体', tier: 1);
+      expect(notifier.state.availableQuests.where((q) => q.id.startsWith('custom_')).length, 1);
+      final templates = statsBox.get('customQuestTemplates') as List;
+      expect(templates.length, 1);
+
+      await statsBox.put('lastRefresh', DateTime.now().subtract(const Duration(days: 2)));
+      final notifier2 = QuestNotifier(questBox, statsBox, settingsBox);
+      expect(notifier2.state.availableQuests.where((q) => q.id.startsWith('custom_')).length, 1);
+    });
+  });
 }

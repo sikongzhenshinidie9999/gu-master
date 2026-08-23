@@ -288,14 +288,31 @@ class _QuestCard extends StatelessWidget {
                 children: [
                   Consumer(
                     builder: (context, ref, _) {
-                      return IconButton(
-                        onPressed: () => _confirmDeleteQuest(context, ref, quest),
-                        tooltip: '删除修炼任务',
+                      final isCustom = quest.id.startsWith('custom_');
+                      return PopupMenuButton<String>(
+                        tooltip: '任务操作',
                         icon: Icon(
                           Icons.delete_outline_rounded,
                           color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
                         ),
-                        visualDensity: VisualDensity.compact,
+                        onSelected: (value) {
+                          if (value == 'delete') {
+                            _confirmDeleteQuest(context, ref, quest);
+                          } else if (value == 'permanent') {
+                            _confirmPermanentDeleteQuest(context, ref, quest);
+                          }
+                        },
+                        itemBuilder: (context) => [
+                          const PopupMenuItem<String>(
+                            value: 'delete',
+                            child: Text('删除任务'),
+                          ),
+                          if (isCustom)
+                            const PopupMenuItem<String>(
+                              value: 'permanent',
+                              child: Text('永久删除'),
+                            ),
+                        ],
                       );
                     },
                   ),
@@ -473,6 +490,35 @@ Future<void> _confirmDeleteQuest(
     notifier.deleteQuest(quest);
     if (context.mounted) {
       showAppSnackBar(context, '已删除修炼任务');
+    }
+  }
+}
+
+Future<void> _confirmPermanentDeleteQuest(
+    BuildContext context, WidgetRef ref, QuestModel quest) async {
+  final notifier = ref.read(questProvider.notifier);
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('永久删除自定义任务？'),
+      content: const Text('将同时删除该自定义任务模板，之后每天不再生成。此操作不可恢复。'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('取消'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(context, true),
+          style: TextButton.styleFrom(foregroundColor: Colors.red),
+          child: const Text('永久删除'),
+        ),
+      ],
+    ),
+  );
+  if (confirmed == true) {
+    notifier.permanentlyDeleteCustomQuest(quest);
+    if (context.mounted) {
+      showAppSnackBar(context, '已永久删除');
     }
   }
 }

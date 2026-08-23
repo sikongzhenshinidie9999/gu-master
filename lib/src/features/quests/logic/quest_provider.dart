@@ -443,6 +443,40 @@ class QuestNotifier extends StateNotifier<QuestState> {
     );
   }
 
+  /// 永久删除自定义任务：删除当前实例 + 删除 customQuestTemplates 中对应模板。
+  ///
+  /// - 系统任务调用时退化为普通删除（UI 不提供永久删除入口）；
+  /// - 删除后同日 Shuffle / 次日刷新均不再生成该任务；
+  /// - 之后手动重新创建相同内容会被视为新模板，可正常每日生成。
+  void permanentlyDeleteCustomQuest(QuestModel quest) {
+    if (!_isCustomQuest(quest)) {
+      deleteQuest(quest);
+      return;
+    }
+
+    // 防同日边缘：即使模板已删除，记录也无害
+    _deletedTodayCustomKeys.add(_questTemplateKey(quest));
+
+    quest.delete();
+    state = state.copyWith(
+      availableQuests:
+          state.availableQuests.where((q) => q.id != quest.id).toList(),
+      activeQuests: state.activeQuests.where((q) => q.id != quest.id).toList(),
+      completedQuests: state.completedQuests.where((q) => q.id != quest.id).toList(),
+    );
+
+    // 精确删除对应模板（内容键匹配；防御性只删第一个匹配）
+    final templates = _readCustomTemplates(statsBox);
+    final key = _questTemplateKey(quest);
+    for (var i = 0; i < templates.length; i++) {
+      if (_customTemplateKey(templates[i]) == key) {
+        templates.removeAt(i);
+        break;
+      }
+    }
+    _saveCustomTemplates(statsBox, templates);
+  }
+
   void _updateStreak() {
     final now = DateTime.now();
     final lastDate = state.lastCompletedDate;
