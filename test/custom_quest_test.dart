@@ -339,4 +339,141 @@ void main() {
       expect(system.where((q) => q.tier == 3).length, 2);
     });
   });
+
+  group('任务手动删除', () {
+    test('删除 available 系统任务：Hive 与 UI 移除，刷新后系统任务仍 6 个', () {
+      final notifier = newNotifier();
+      final system = notifier.state.availableQuests
+          .firstWhere((q) => !q.id.startsWith('custom_'));
+      final systemId = system.id;
+
+      notifier.deleteQuest(system);
+
+      expect(questBox.values.where((q) => q.id == systemId), isEmpty);
+      expect(notifier.state.availableQuests.where((q) => q.id == systemId), isEmpty);
+      expect(notifier.state.availableQuests.length, 5);
+
+      notifier.shuffleQuests();
+      final systemAfter =
+          notifier.state.availableQuests.where((q) => !q.id.startsWith('custom_')).toList();
+      expect(systemAfter.length, 6);
+    });
+
+    test('删除 active 自定义任务：Hive 删除、active 消失、模板仍在', () {
+      final notifier = newNotifier();
+      notifier.createCustomQuest(title: '冥想', description: '打坐', category: '炼神', tier: 1);
+      final custom = notifier.state.availableQuests.last;
+      final customId = custom.id;
+      notifier.acceptQuest(custom);
+
+      notifier.deleteQuest(custom);
+
+      expect(questBox.values.where((q) => q.id == customId), isEmpty);
+      expect(notifier.state.activeQuests.where((q) => q.id == customId), isEmpty);
+      final templates = statsBox.get('customQuestTemplates') as List;
+      expect(templates.length, 1);
+    });
+
+    test('删除 completed 任务：Hive 删除、completed 消失', () {
+      final notifier = newNotifier();
+      notifier.createCustomQuest(title: '打坐', description: '十分钟', category: '炼神', tier: 1);
+      final custom = notifier.state.availableQuests.last;
+      final customId = custom.id;
+      notifier.acceptQuest(custom);
+      notifier.completeQuest(custom);
+      expect(notifier.state.completedQuests.map((q) => q.id), contains(customId));
+
+      notifier.deleteQuest(custom);
+
+      expect(questBox.values.where((q) => q.id == customId), isEmpty);
+      expect(notifier.state.completedQuests.where((q) => q.id == customId), isEmpty);
+    });
+
+    test('删除当天自定义任务：今日消失、模板仍在、同日 Shuffle 不复活', () {
+      final notifier = newNotifier();
+      notifier.createCustomQuest(title: '背单词', description: '30 分钟', category: '炼神', tier: 2);
+      final custom = notifier.state.availableQuests.last;
+      final customId = custom.id;
+
+      notifier.deleteQuest(custom);
+
+      expect(notifier.state.availableQuests.where((q) => q.id == customId), isEmpty);
+      expect(questBox.values.where((q) => q.id == customId), isEmpty);
+      final templates = statsBox.get('customQuestTemplates') as List;
+      expect(templates.length, 1);
+
+      expect(notifier.state.canShuffle, isTrue);
+      notifier.shuffleQuests();
+      final customsAfter =
+          notifier.state.availableQuests.where((q) => q.id.startsWith('custom_')).toList();
+      expect(customsAfter, isEmpty);
+      expect(questBox.values.where((q) => q.id.startsWith('custom_')).length, 0);
+    });
+
+    test('删除当天自定义任务后，第二天按模板重新生成新实例', () async {
+      final notifier = newNotifier();
+      notifier.createCustomQuest(title: '晨练', description: '拉伸', category: '炼体', tier: 1);
+      final custom = notifier.state.availableQuests.last;
+      final oldId = custom.id;
+      notifier.deleteQuest(custom);
+
+      await statsBox.put('lastRefresh', DateTime.now().subtract(const Duration(days: 2)));
+      final notifier2 = QuestNotifier(questBox, statsBox, settingsBox);
+
+      final customs = notifier2.state.availableQuests
+          .where((q) => q.id.startsWith('custom_')).toList();
+      expect(customs.length, 1);
+      final today = customs.first;
+      expect(today.id, isNot(oldId));
+      final now = DateTime.now();
+      expect(today.createdAt.year, now.year);
+      expect(today.createdAt.month, now.month);
+      expect(today.createdAt.day, now.day);
+      expect(today.acceptedAt, isNull);
+      expect(today.isCompleted, isFalse);
+      expect(today.isFailed, isFalse);
+      expect(today.title, '晨练');
+    });
+
+    test('多个自定义任务分别删除：只影响被删者，其他模板正常生成', () {
+      final notifier = newNotifier();
+      notifier.createCustomQuest(title: 'A', description: 'a', category: '炼体', tier: 1);
+      notifier.createCustomQuest(title: 'B', description: 'b', category: '悟道', tier: 2);
+      final customs = notifier.state.availableQuests
+          .where((q) => q.id.startsWith('custom_')).toList();
+      expect(customs.length, 2);
+
+      final a = customs.firstWhere((q) => q.title == 'A');
+      notifier.deleteQuest(a);
+
+      expect(questBox.values.where((q) => q.id == a.id), isEmpty);
+      final remaining = notifier.state.availableQuests
+          .where((q) => q.id.startsWith('custom_')).toList();
+      expect(remaining.length, 1);
+      expect(remaining.first.title, 'B');
+      final templates = statsBox.get('customQuestTemplates') as List;
+      expect(templates.length, 2);
+    });
+
+    test('删除系统任务不永久影响任务池', () async {
+      final notifier = newNotifier();
+      final system = notifier.state.availableQuests
+          .firstWhere((q) => !q.id.startsWith('custom_'));
+      final deletedId = system.id;
+      notifier.deleteQuest(system);
+
+      // 模拟连续 3 天刷新：每次都正常生成 6 个系统任务，且无任何排除记录
+      for (var i = 0; i < 3; i++) {
+        await statsBox.put('lastRefresh', DateTime.now().subtract(const Duration(days: 2)));
+        final refreshed = QuestNotifier(questBox, statsBox, settingsBox);
+        final systemAfter = refreshed.state.availableQuests
+            .where((q) => !q.id.startsWith('custom_')).toList();
+        expect(systemAfter.length, 6);
+        expect(systemAfter.any((q) => q.id == deletedId), isFalse);
+      }
+
+      // 删除没有写入任何排除标记：模板键保持为空，任务池（硬编码）未受影响
+      expect(statsBox.get('customQuestTemplates'), isNull);
+    });
+  });
 }

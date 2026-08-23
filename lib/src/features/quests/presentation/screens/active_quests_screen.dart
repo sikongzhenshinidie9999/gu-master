@@ -166,6 +166,14 @@ class _ActiveQuestItemState extends ConsumerState<_ActiveQuestItem> {
                   ],
                 ),
               ),
+              IconButton(
+                onPressed: () => _confirmDeleteQuest(context, ref, widget.quest),
+                tooltip: '删除修炼任务',
+                icon: Icon(
+                  Icons.delete_outline_rounded,
+                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 12),
@@ -202,5 +210,34 @@ class _ActiveQuestItemState extends ConsumerState<_ActiveQuestItem> {
         ],
       ),
     );
+  }
+}
+
+Future<void> _confirmDeleteQuest(
+    BuildContext context, WidgetRef ref, QuestModel quest) async {
+  final notifier = ref.read(questProvider.notifier);
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('删除修炼任务？'),
+      content: const Text('只删除当前任务实例，不影响系统任务池或自定义任务模板。'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('取消'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(context, true),
+          style: TextButton.styleFrom(foregroundColor: Colors.red),
+          child: const Text('删除'),
+        ),
+      ],
+    ),
+  );
+  if (confirmed == true) {
+    notifier.deleteQuest(quest);
+    if (context.mounted) {
+      showAppSnackBar(context, '已删除修炼任务');
+    }
   }
 }

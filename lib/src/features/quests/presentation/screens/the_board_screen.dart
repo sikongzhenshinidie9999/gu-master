@@ -283,39 +283,53 @@ class _QuestCard extends StatelessWidget {
               ),
               // Use Consumer here locally if needed, but since we are in a ConsumerWidget tree (TheBoardScreen),
               // we can pass the ref or callback.
-              // To keep _QuestCard efficient and pure, we should pass the callback,
-              // but for simplicity in refactor, using Consumer is fine or accessing ref from parent.
-              // Since _QuestCard is Stateless, we need to wrap the button in Consumer or pass callback.
-              // Let's use Consumer just for the button interaction.
-              Consumer(
-                builder: (context, ref, _) {
-                  return OutlinedButton(
-                    onPressed: () {
-                      ref.read(questProvider.notifier).acceptQuest(quest);
-                      showAppSnackBar(context, '已接取修炼任务');
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Consumer(
+                    builder: (context, ref, _) {
+                      return IconButton(
+                        onPressed: () => _confirmDeleteQuest(context, ref, quest),
+                        tooltip: '删除修炼任务',
+                        icon: Icon(
+                          Icons.delete_outline_rounded,
+                          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                        ),
+                        visualDensity: VisualDensity.compact,
+                      );
                     },
-                    style: OutlinedButton.styleFrom(
-                      backgroundColor: Theme.of(context).brightness == Brightness.dark 
-                          ? Colors.white.withValues(alpha: 0.05)
-                          : Colors.black.withValues(alpha: 0.05),
-                      side: BorderSide(
-                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.2),
-                        width: 1,
-                      ),
-                      foregroundColor: Theme.of(context).colorScheme.onSurface,
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    ),
-                    child: Text(
-                      '接取', 
-                      style: GoogleFonts.outfit(
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 2.0,
-                        fontSize: 12,
-                      ),
-                    ),
-                  );
-                }
+                  ),
+                  Consumer(
+                    builder: (context, ref, _) {
+                      return OutlinedButton(
+                        onPressed: () {
+                          ref.read(questProvider.notifier).acceptQuest(quest);
+                          showAppSnackBar(context, '已接取修炼任务');
+                        },
+                        style: OutlinedButton.styleFrom(
+                          backgroundColor: Theme.of(context).brightness == Brightness.dark
+                              ? Colors.white.withValues(alpha: 0.05)
+                              : Colors.black.withValues(alpha: 0.05),
+                          side: BorderSide(
+                            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.2),
+                            width: 1,
+                          ),
+                          foregroundColor: Theme.of(context).colorScheme.onSurface,
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        ),
+                        child: Text(
+                          '接取',
+                          style: GoogleFonts.outfit(
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 2.0,
+                            fontSize: 12,
+                          ),
+                        ),
+                      );
+                    }
+                  ),
+                ],
               ),
             ],
           ),
@@ -431,5 +445,34 @@ class _TierBadge extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+Future<void> _confirmDeleteQuest(
+    BuildContext context, WidgetRef ref, QuestModel quest) async {
+  final notifier = ref.read(questProvider.notifier);
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('删除修炼任务？'),
+      content: const Text('只删除当前任务实例，不影响系统任务池或自定义任务模板。'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('取消'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(context, true),
+          style: TextButton.styleFrom(foregroundColor: Colors.red),
+          child: const Text('删除'),
+        ),
+      ],
+    ),
+  );
+  if (confirmed == true) {
+    notifier.deleteQuest(quest);
+    if (context.mounted) {
+      showAppSnackBar(context, '已删除修炼任务');
+    }
   }
 }

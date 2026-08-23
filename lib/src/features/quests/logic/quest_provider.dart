@@ -39,6 +39,13 @@ void _saveCustomTemplates(Box<dynamic> statsBox, List<Map<String, dynamic>> temp
   statsBox.put('customQuestTemplates', templates);
 }
 
+/// 自定义任务的内容键（用于「今日已删除」集合，与模板内容稳定对应）。
+String _questTemplateKey(QuestModel quest) =>
+    '${quest.title}\u0000${quest.description}\u0000${quest.category}\u0000${quest.tier}';
+
+String _customTemplateKey(Map<String, dynamic> template) =>
+    '${template['title']}\u0000${template['description']}\u0000${template['category']}\u0000${template['tier']}';
+
 // --- State Definitions ---
 class QuestState {
   final List<QuestModel> availableQuests;
@@ -97,6 +104,8 @@ class QuestNotifier extends StateNotifier<QuestState> {
   final Box<QuestModel> box;
   final Box<dynamic> statsBox;
   final Box<dynamic> settingsBox;
+  // 今日已删除的自定义任务内容键（仅内存态，不写入 Hive；跨天/重启自动失效）
+  final Set<String> _deletedTodayCustomKeys = {};
 
   QuestNotifier(this.box, this.statsBox, this.settingsBox)
       : super(QuestState(
@@ -206,6 +215,12 @@ class QuestNotifier extends StateNotifier<QuestState> {
     final now = DateTime.now();
     final templates = _readCustomTemplates(statsBox);
 
+    // 新的一天：今日已删除集合失效
+    final lastRefresh = statsBox.get('lastRefresh', defaultValue: DateTime(2000));
+    if (!_isSameDay(lastRefresh, now)) {
+      _deletedTodayCustomKeys.clear();
+    }
+
     // 兼容回填：stats Box 中没有模板但存在旧版 custom_ 任务时，从旧任务提取模板
     if (templates.isEmpty) {
       final legacyCustoms = box.values.where(_isCustomQuest).toList();
@@ -252,6 +267,8 @@ class QuestNotifier extends StateNotifier<QuestState> {
 
     // 为每个模板确保「今日实例」存在（不存在才创建，避免重复）
     for (final t in templates) {
+      // 今日已删除的自定义模板不再重建（仅影响当天）
+      if (_deletedTodayCustomKeys.contains(_customTemplateKey(t))) continue;
       final hasToday = box.values.any((q) =>
           _isCustomQuest(q) &&
           _isSameDay(q.createdAt, now) &&
@@ -403,6 +420,26 @@ class QuestNotifier extends StateNotifier<QuestState> {
     
     state = state.copyWith(
        activeQuests: state.activeQuests.where((q) => q.id != quest.id).toList(),
+    );
+  }
+
+  /// 删除单个任务实例。
+  ///
+  /// - 系统任务：只删除当前实例，不修改任务池、不产生任何永久记录；
+  /// - 自定义任务：只删除当天实例，不动 customQuestTemplates；删除今日实例会记入
+  ///   内存态「今日已删除」集合，同日 Shuffle/刷新不再重建；第二天（重启或跨天）
+  ///   集合失效，按模板重新生成新实例。
+  void deleteQuest(QuestModel quest) {
+    if (_isCustomQuest(quest) && _isSameDay(quest.createdAt, DateTime.now())) {
+      _deletedTodayCustomKeys.add(_questTemplateKey(quest));
+    }
+
+    quest.delete();
+    state = state.copyWith(
+      availableQuests:
+          state.availableQuests.where((q) => q.id != quest.id).toList(),
+      activeQuests: state.activeQuests.where((q) => q.id != quest.id).toList(),
+      completedQuests: state.completedQuests.where((q) => q.id != quest.id).toList(),
     );
   }
 
