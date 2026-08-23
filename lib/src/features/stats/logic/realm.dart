@@ -101,3 +101,53 @@ RealmProgress getRealmProgress(int totalXp) {
     progress: progress,
   );
 }
+
+/// 境界突破事件（纯数据）。
+class RealmBreakthrough {
+  const RealmBreakthrough({
+    required this.fromName,
+    required this.fromLevel,
+    required this.toName,
+    required this.toLevel,
+    required this.gainedXp,
+  });
+
+  /// 突破前境界名称。
+  final String fromName;
+
+  /// 突破前境界等级（0 起）。
+  final int fromLevel;
+
+  /// 突破后境界名称。
+  final String toName;
+
+  /// 突破后境界等级（0 起）。
+  final int toLevel;
+
+  /// 本次获得的修为。
+  final int gainedXp;
+}
+
+/// 检测境界突破（纯计算）。
+///
+/// 根据 [oldTotalXp] 与 [newTotalXp] 分别计算境界，
+/// 当新境界等级高于旧境界等级时返回 [RealmBreakthrough]，否则返回 null。
+/// 九转尊者为最高境界，继续增加修为不会再次触发突破。
+RealmBreakthrough? detectRealmBreakthrough({
+  required int oldTotalXp,
+  required int newTotalXp,
+  required int gainedXp,
+}) {
+  final oldRealm = getRealmProgress(oldTotalXp);
+  final newRealm = getRealmProgress(newTotalXp);
+  if (newRealm.level <= oldRealm.level) {
+    return null;
+  }
+  return RealmBreakthrough(
+    fromName: oldRealm.name,
+    fromLevel: oldRealm.level,
+    toName: newRealm.name,
+    toLevel: newRealm.level,
+    gainedXp: gainedXp,
+  );
+}

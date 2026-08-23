@@ -163,7 +163,7 @@ class SettingsScreen extends ConsumerWidget {
       builder: (context) => AlertDialog(
         title: const Text("Wipe All Data?"),
         content: const Text(
-          "This action is irreversible. All your XP, streaks, and quest history will be permanently deleted.",
+          "此操作不可撤销，你的修为、修炼天数和修炼记录将被永久删除。",
         ),
         actions: [
           TextButton(

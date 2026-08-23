@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:uuid/uuid.dart';
 import '../data/quest_model.dart';
+import '../../stats/logic/realm.dart';
 
 // --- Hive Box Provider ---
 final questBoxProvider = Provider<Box<QuestModel>>((ref) {
@@ -19,6 +20,8 @@ class QuestState {
   final DateTime? lastCompletedDate;
   final Map<DateTime, String> weeklyHistory;
   final bool canShuffle;
+  // 最近一次境界突破事件（仅内存态，绝不进入 Hive）。
+  final RealmBreakthrough? lastBreakthrough;
 
   QuestState({
     required this.availableQuests,
@@ -29,6 +32,7 @@ class QuestState {
     this.lastCompletedDate,
     this.weeklyHistory = const {},
     this.canShuffle = true,
+    this.lastBreakthrough,
   });
 
   QuestState copyWith({
@@ -40,6 +44,8 @@ class QuestState {
     DateTime? lastCompletedDate,
     Map<DateTime, String>? weeklyHistory,
     bool? canShuffle,
+    RealmBreakthrough? lastBreakthrough,
+    bool clearLastBreakthrough = false,
   }) {
     return QuestState(
       availableQuests: availableQuests ?? this.availableQuests,
@@ -50,6 +56,9 @@ class QuestState {
       lastCompletedDate: lastCompletedDate ?? this.lastCompletedDate,
       weeklyHistory: weeklyHistory ?? this.weeklyHistory,
       canShuffle: canShuffle ?? this.canShuffle,
+      lastBreakthrough: clearLastBreakthrough
+          ? null
+          : (lastBreakthrough ?? this.lastBreakthrough),
     );
   }
 }
@@ -209,22 +218,40 @@ class QuestNotifier extends StateNotifier<QuestState> {
   }
 
   void completeQuest(QuestModel quest) {
+    // 先清空上一次突破事件，避免本次未突破时遗留旧事件
+    state = state.copyWith(clearLastBreakthrough: true);
+
     quest.isCompleted = true;
     quest.save();
 
-    final newXp = state.totalXp + quest.xpReward;
+    final oldTotalXp = state.totalXp;
+    final newXp = oldTotalXp + quest.xpReward;
     statsBox.put('totalXp', newXp);
 
     _updateStreak();
     _updateWeeklyHistory(DateTime.now(), 'completed');
 
+    final breakthrough = detectRealmBreakthrough(
+      oldTotalXp: oldTotalXp,
+      newTotalXp: newXp,
+      gainedXp: quest.xpReward,
+    );
+
     state = state.copyWith(
       activeQuests: state.activeQuests.where((q) => q.id != quest.id).toList(),
       completedQuests: [...state.completedQuests, quest],
       totalXp: newXp,
+      lastBreakthrough: breakthrough,
     );
   }
   
+  /// 晋升反馈展示完成后清除突破事件（仅内存态）。
+  void clearLastBreakthrough() {
+    if (state.lastBreakthrough != null) {
+      state = state.copyWith(clearLastBreakthrough: true);
+    }
+  }
+
   void failQuest(QuestModel quest) {
     quest.isFailed = true;
     quest.save();

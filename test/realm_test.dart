@@ -79,4 +79,55 @@ void main() {
       expect(p.progress, 1.0);
     });
   });
+
+  group('detectRealmBreakthrough', () {
+    test('90 + 10：凡人 → 一转蛊师', () {
+      final b = detectRealmBreakthrough(oldTotalXp: 90, newTotalXp: 100, gainedXp: 10);
+      expect(b, isNotNull);
+      if (b == null) return;
+      expect(b.fromName, '凡人');
+      expect(b.fromLevel, 0);
+      expect(b.toName, '一转蛊师');
+      expect(b.toLevel, 1);
+      expect(b.gainedXp, 10);
+    });
+
+    test('99 + 1：凡人 → 一转蛊师', () {
+      final b = detectRealmBreakthrough(oldTotalXp: 99, newTotalXp: 100, gainedXp: 1);
+      expect(b, isNotNull);
+      if (b == null) return;
+      expect(b.fromName, '凡人');
+      expect(b.toName, '一转蛊师');
+      expect(b.gainedXp, 1);
+    });
+
+    test('150 + 25：无突破', () {
+      final b = detectRealmBreakthrough(oldTotalXp: 150, newTotalXp: 175, gainedXp: 25);
+      expect(b, isNull);
+    });
+
+    test('95 + 50：凡人 → 一转蛊师（一次跨入）', () {
+      final b = detectRealmBreakthrough(oldTotalXp: 95, newTotalXp: 145, gainedXp: 50);
+      expect(b, isNotNull);
+      if (b == null) return;
+      expect(b.fromName, '凡人');
+      expect(b.toName, '一转蛊师');
+      expect(b.gainedXp, 50);
+    });
+
+    test('9999 + 50：八转蛊仙 → 九转尊者', () {
+      final b = detectRealmBreakthrough(oldTotalXp: 9999, newTotalXp: 10049, gainedXp: 50);
+      expect(b, isNotNull);
+      if (b == null) return;
+      expect(b.fromName, '八转蛊仙');
+      expect(b.fromLevel, 8);
+      expect(b.toName, '九转尊者');
+      expect(b.toLevel, 9);
+    });
+
+    test('10000 + 50：九转尊者不再突破', () {
+      final b = detectRealmBreakthrough(oldTotalXp: 10000, newTotalXp: 10050, gainedXp: 50);
+      expect(b, isNull);
+    });
+  });
 }

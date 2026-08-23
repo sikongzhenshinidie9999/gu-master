@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import '../../logic/quest_provider.dart';
 import '../../data/quest_model.dart';
+import 'package:sidequest/src/features/stats/logic/realm.dart';
 import 'package:sidequest/src/shared/widgets/glass_card.dart';
 
 class ActiveQuestsScreen extends ConsumerWidget {
@@ -14,6 +15,27 @@ class ActiveQuestsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final questState = ref.watch(questProvider);
     final activeQuests = questState.activeQuests;
+
+    // 监听境界突破事件，弹出晋升反馈
+    ref.listen<RealmBreakthrough?>(
+      questProvider.select((state) => state.lastBreakthrough),
+      (previous, next) {
+        if (next == null) return;
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              content: Text(
+                '🎉 境界突破！\n${next.fromName} → ${next.toName}\n修为 +${next.gainedXp}',
+              ),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        // 显示后立即清除，避免重复触发
+        final notifier = ref.read(questProvider.notifier);
+        Future.microtask(() => notifier.clearLastBreakthrough());
+      },
+    );
 
     if (activeQuests.isEmpty) {
       return const Center(child: Text("暂无修炼中的任务，去任务板看看吧"));

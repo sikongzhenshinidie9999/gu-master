@@ -21,7 +21,7 @@ class NotificationService {
     "Coins don't earn themselves, Witcher.",
     "A new day, a new contract.",
     "The path is clear. Walk it.",
-    "Rise and shine, hero. XP awaits.",
+    "醒来吧，修炼者，修为在等待。",
     "The world needs you today.",
   ];
 
@@ -30,7 +30,7 @@ class NotificationService {
     "Finish your quests before the midnight bell.",
     "Don't let your streak turn to ash.",
     "The tavern awaits, but work comes first.",
-    "Last chance to claim your XP.",
+    "领取修为的最后机会。",
     "Night falls. Is your journal complete?",
     "The monsters of procrastination draw near.",
   ];
