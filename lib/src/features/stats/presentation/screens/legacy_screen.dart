@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:sidequest/src/features/cultivation/data/dao.dart';
 import 'package:sidequest/src/features/cultivation/data/player_profile.dart';
 import 'package:sidequest/src/features/cultivation/logic/cultivation_provider.dart';
+import 'package:sidequest/src/features/cultivation/logic/faction_realm.dart';
 import 'package:sidequest/src/features/quests/logic/quest_provider.dart';
 import 'package:sidequest/src/features/stats/logic/realm.dart';
 import 'package:sidequest/src/shared/widgets/glass_card.dart';
@@ -25,6 +26,8 @@ class LegacyScreen extends ConsumerWidget {
           _buildHeroStats(context, questState.totalXp, cultivationState.profile),
           const SizedBox(height: 20),
           _buildDaoTraces(context, cultivationState.profile),
+          const SizedBox(height: 20),
+          _buildFactionRealms(context, cultivationState.profile),
           const SizedBox(height: 20),
           _buildWeeklyProgress(context, questState.weeklyHistory),
           const SizedBox(height: 24),
@@ -167,6 +170,81 @@ class LegacyScreen extends ConsumerWidget {
     );
   }
 
+  Widget _buildFactionRealms(BuildContext context, PlayerProfile profile) {
+    return GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.military_tech_rounded, size: 20),
+              SizedBox(width: 8),
+              Text(
+                '流派境界',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          for (final faction in Faction.values)
+            _buildFactionRealmRow(context, profile, faction),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFactionRealmRow(
+      BuildContext context, PlayerProfile profile, Faction faction) {
+    final dao = profile.daoTraces[faction.daoKind.index] ?? 0;
+    final realm = getFactionRealmProgress(faction, dao);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                faction.label,
+                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+              ),
+              Text(
+                realm.level.label,
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: LinearProgressIndicator(
+              value: realm.progress,
+              minHeight: 6,
+              backgroundColor:
+                  Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.08),
+              valueColor: AlwaysStoppedAnimation<Color>(
+                  Theme.of(context).colorScheme.primary),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            realm.isCapped
+                ? '境界已达无上大宗师，道痕仍可继续积累（道痕 ${NumberFormat.decimalPattern().format(dao)}）'
+                : '道痕 ${NumberFormat.decimalPattern().format(dao)} / ${NumberFormat.decimalPattern().format(realm.nextThreshold!)}',
+            style: TextStyle(
+              fontSize: 11,
+              color: Theme.of(context).textTheme.bodySmall?.color?.withValues(alpha: 0.7),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
   Widget _buildWeeklyProgress(BuildContext context, Map<DateTime, String> history) {
     final now = DateTime.now();
     // Start from Monday of the current week
