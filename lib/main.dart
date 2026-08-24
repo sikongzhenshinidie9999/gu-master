@@ -3,6 +3,12 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'src/features/cultivation/data/dao_zhu.dart';
+import 'src/features/cultivation/data/gu_insect.dart';
+import 'src/features/cultivation/data/gu_material.dart';
+import 'src/features/cultivation/data/player_profile.dart';
+import 'src/features/cultivation/data/tribulation_record.dart';
+import 'src/features/cultivation/logic/cultivation_provider.dart';
 import 'src/features/quests/data/quest_model.dart';
 import 'src/features/quests/logic/quest_provider.dart';
 import 'src/features/settings/logic/settings_provider.dart';
@@ -16,11 +22,27 @@ void main() async {
   if (!Hive.isAdapterRegistered(0)) {
      Hive.registerAdapter(QuestModelAdapter());
   }
+  if (!Hive.isAdapterRegistered(1)) {
+    Hive.registerAdapter(PlayerProfileAdapter());
+  }
+  if (!Hive.isAdapterRegistered(2)) {
+    Hive.registerAdapter(TribulationRecordAdapter());
+  }
+  if (!Hive.isAdapterRegistered(3)) {
+    Hive.registerAdapter(GuInsectAdapter());
+  }
+  if (!Hive.isAdapterRegistered(4)) {
+    Hive.registerAdapter(GuMaterialAdapter());
+  }
+  if (!Hive.isAdapterRegistered(5)) {
+    Hive.registerAdapter(DaoZhuStateAdapter());
+  }
   
   // Open Boxes
   final questBox = await Hive.openBox<QuestModel>('quests');
   await Hive.openBox('stats');
   await Hive.openBox('settings');
+  final cultivationBox = await Hive.openBox<PlayerProfile>('cultivation');
 
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
@@ -30,6 +52,7 @@ void main() async {
     ProviderScope(
       overrides: [
         questBoxProvider.overrideWithValue(questBox),
+        cultivationBoxProvider.overrideWithValue(cultivationBox),
       ],
       child: const SidequestApp(),
     ),

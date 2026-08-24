@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:uuid/uuid.dart';
 import '../data/quest_model.dart';
+import '../../cultivation/logic/cultivation_provider.dart';
 import '../../stats/logic/realm.dart';
 
 // --- Hive Box Provider ---
@@ -104,10 +105,13 @@ class QuestNotifier extends StateNotifier<QuestState> {
   final Box<QuestModel> box;
   final Box<dynamic> statsBox;
   final Box<dynamic> settingsBox;
+  // 完成任务后的修炼奖励回调（可选；默认不接 cultivation，避免测试耦合）
+  final void Function(QuestModel quest)? onQuestCompleted;
   // 今日已删除的自定义任务内容键（仅内存态，不写入 Hive；跨天/重启自动失效）
   final Set<String> _deletedTodayCustomKeys = {};
 
-  QuestNotifier(this.box, this.statsBox, this.settingsBox)
+  QuestNotifier(this.box, this.statsBox, this.settingsBox,
+      {this.onQuestCompleted})
       : super(QuestState(
           availableQuests: [],
           activeQuests: [],
@@ -378,6 +382,9 @@ class QuestNotifier extends StateNotifier<QuestState> {
   }
 
   void completeQuest(QuestModel quest) {
+    // 防重复完成 / 重复发奖：已完成任务不能再完成一次
+    if (quest.isCompleted) return;
+
     // 先清空上一次突破事件，避免本次未突破时遗留旧事件
     state = state.copyWith(clearLastBreakthrough: true);
 
@@ -396,6 +403,9 @@ class QuestNotifier extends StateNotifier<QuestState> {
       newTotalXp: newXp,
       gainedXp: quest.xpReward,
     );
+
+    // 追加道痕奖励（由 cultivation 侧持久化；无流派道痕时内部跳过）
+    onQuestCompleted?.call(quest);
 
     state = state.copyWith(
       activeQuests: state.activeQuests.where((q) => q.id != quest.id).toList(),
@@ -557,5 +567,9 @@ final questProvider = StateNotifierProvider<QuestNotifier, QuestState>((ref) {
   final box = ref.watch(questBoxProvider);
   final statsBox = Hive.box('stats');
   final settingsBox = Hive.box('settings');
-  return QuestNotifier(box, statsBox, settingsBox);
+  // 完成任务后追加道痕奖励（cultivation 不依赖 quests，无循环依赖）
+  final onQuestCompleted =
+      ref.read(cultivationProvider.notifier).applyQuestCompletedRewards;
+  return QuestNotifier(box, statsBox, settingsBox,
+      onQuestCompleted: onQuestCompleted);
 });

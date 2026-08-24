@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:sidequest/src/features/cultivation/data/dao.dart';
+import 'package:sidequest/src/features/cultivation/data/player_profile.dart';
+import 'package:sidequest/src/features/cultivation/logic/cultivation_provider.dart';
 import 'package:sidequest/src/features/quests/logic/quest_provider.dart';
 import 'package:sidequest/src/features/stats/logic/realm.dart';
 import 'package:sidequest/src/shared/widgets/glass_card.dart';
@@ -12,13 +15,16 @@ class LegacyScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final questState = ref.watch(questProvider);
+    final cultivationState = ref.watch(cultivationProvider);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _buildHeroStats(context, questState.totalXp),
+          _buildHeroStats(context, questState.totalXp, cultivationState.profile),
+          const SizedBox(height: 20),
+          _buildDaoTraces(context, cultivationState.profile),
           const SizedBox(height: 20),
           _buildWeeklyProgress(context, questState.weeklyHistory),
           const SizedBox(height: 24),
@@ -36,7 +42,8 @@ class LegacyScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildHeroStats(BuildContext context, int totalXp) {
+  Widget _buildHeroStats(
+      BuildContext context, int totalXp, PlayerProfile profile) {
     final realm = getRealmProgress(totalXp);
     final needNext = realm.isMaxRealm ? 0 : (realm.nextThreshold! - totalXp);
 
@@ -107,6 +114,54 @@ class LegacyScreen extends ConsumerWidget {
               color: Theme.of(context).textTheme.bodySmall?.color?.withValues(alpha: 0.7),
             ),
           ),
+          const SizedBox(height: 10),
+          Text(
+            '累计修为：${NumberFormat.decimalPattern().format(profile.totalXp)}　当前修为：${NumberFormat.decimalPattern().format(profile.currentCultivation)}',
+            style: TextStyle(
+              fontSize: 12,
+              color: Theme.of(context).textTheme.bodySmall?.color?.withValues(alpha: 0.7),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDaoTraces(BuildContext context, PlayerProfile profile) {
+    return GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.auto_awesome_rounded, size: 20),
+              SizedBox(width: 8),
+              Text(
+                '道痕',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          for (final kind in DaoKind.values)
+            if (kind != DaoKind.none)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(kind.label, style: const TextStyle(fontSize: 14)),
+                    Text(
+                      '${profile.daoTraces[kind.index] ?? 0}',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
         ],
       ),
     );
