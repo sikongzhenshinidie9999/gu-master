@@ -20,19 +20,28 @@ class GuInsectAdapter extends TypeAdapter<GuInsect> {
       id: fields[0] as String,
       turn: fields[1] as int,
       refinedDaoLevel: fields[2] as int,
+      definitionId: fields[3] as String,
+      faction: fields[4] as int,
+      quality: fields[5] as int,
     );
   }
 
   @override
   void write(BinaryWriter writer, GuInsect obj) {
     writer
-      ..writeByte(3)
+      ..writeByte(6)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
       ..write(obj.turn)
       ..writeByte(2)
-      ..write(obj.refinedDaoLevel);
+      ..write(obj.refinedDaoLevel)
+      ..writeByte(3)
+      ..write(obj.definitionId)
+      ..writeByte(4)
+      ..write(obj.faction)
+      ..writeByte(5)
+      ..write(obj.quality);
   }
 
   @override

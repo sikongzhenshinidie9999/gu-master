@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
@@ -12,6 +13,7 @@ import 'package:sidequest/src/features/cultivation/data/player_profile.dart';
 import 'package:sidequest/src/features/cultivation/data/tribulation_record.dart';
 import 'package:sidequest/src/features/cultivation/logic/cultivation_provider.dart';
 import 'package:sidequest/src/features/cultivation/logic/faction_realm.dart';
+import 'package:sidequest/src/features/cultivation/logic/refining_config.dart';
 import 'package:sidequest/src/features/cultivation/logic/reward_config.dart';
 import 'package:sidequest/src/features/quests/logic/quest_provider.dart';
 import 'package:sidequest/src/features/quests/data/quest_model.dart';
@@ -80,8 +82,15 @@ void main() {
     profile.factionLevels[1] = 2; // Faction.zhi -> FactionLevel.grandmaster
     profile.tribulations.add(
         TribulationRecord(realmLevel: 6, stageIndex: 1, failCount: 2));
-    profile.guInsects.add(GuInsect(id: 'g1', turn: 2, refinedDaoLevel: 3));
-    profile.guMaterials.add(GuMaterial(type: 0, quantity: 5));
+    profile.guInsects.add(GuInsect(
+      id: 'g1',
+      turn: 2,
+      refinedDaoLevel: 3,
+      definitionId: 'bronze_beetle',
+      faction: Faction.li.index,
+      quality: 0,
+    ));
+    profile.guMaterials.add(GuMaterial(materialId: 'bronze_sand', quantity: 5));
     notifier.saveProfile(profile);
 
     final stored = cultivationBox.values.first;
@@ -235,4 +244,238 @@ void main() {
       expect(realm.level, FactionLevel.ordinary);
     });
   });
+
+  group('蛊材 / 蛊虫 Hive 序列化', () {
+    test('GuMaterial materialId 与 quantity 正确写读', () async {
+      final profile = PlayerProfile();
+      profile.guMaterials.add(
+          GuMaterial(materialId: 'bronze_sand', quantity: 5));
+      await cultivationBox.add(profile);
+      final stored = cultivationBox.values.first;
+      expect(stored.guMaterials.length, 1);
+      expect(stored.guMaterials.first.materialId, 'bronze_sand');
+      expect(stored.guMaterials.first.quantity, 5);
+    });
+
+    test('GuInsect 原字段 + 新字段正确写读', () async {
+      final profile = PlayerProfile();
+      profile.guInsects.add(GuInsect(
+        id: 'g1',
+        turn: 3,
+        refinedDaoLevel: 2,
+        definitionId: 'iron_centipede',
+        faction: Faction.lian.index,
+        quality: 1,
+      ));
+      await cultivationBox.add(profile);
+      final stored = cultivationBox.values.first;
+      final insect = stored.guInsects.first;
+      expect(insect.id, 'g1');
+      expect(insect.turn, 3);
+      expect(insect.refinedDaoLevel, 2);
+      expect(insect.definitionId, 'iron_centipede');
+      expect(insect.faction, Faction.lian.index);
+      expect(insect.quality, 1);
+    });
+  });
+
+  group('任务完成蛊材掉落', () {
+    QuestNotifier wired(CultivationNotifier cult) => QuestNotifier(
+        questBox, statsBox, settingsBox,
+        onQuestCompleted: cult.applyQuestCompletedRewards);
+
+    test('完成任务可获得材料', () {
+      final cult = CultivationNotifier(cultivationBox, statsBox);
+      final quests = wired(cult);
+      quests.createCustomQuest(
+          title: '杂务', description: '扫地', category: '杂务', tier: 1);
+      final q = quests.state.availableQuests.last;
+      quests.acceptQuest(q);
+      quests.completeQuest(q);
+      // 默认转数 1 下必有合法材料 → 一定掉落
+      expect(cult.state.profile.guMaterials, isNotEmpty);
+    });
+
+    test('相同 materialId 正确堆叠', () {
+      final cult = CultivationNotifier(cultivationBox, statsBox);
+      final quests = wired(cult);
+      for (var i = 0; i < 2; i++) {
+        quests.createCustomQuest(
+            title: '杂务$i', description: 'd', category: '杂务', tier: 1);
+        final q = quests.state.availableQuests.last;
+        quests.acceptQuest(q);
+        cult.applyQuestCompletedRewards(q, random: _FixedRandom(0.0));
+      }
+      final bronze = cult.state.profile.guMaterials
+          .where((m) => m.materialId == 'bronze_sand')
+          .toList();
+      expect(bronze.length, 1);
+      expect(bronze.first.quantity, 2);
+    });
+
+    test('每日上限生效', () async {
+      final cult = CultivationNotifier(cultivationBox, statsBox);
+      await statsBox.put('lastMaterialDropDay', DateTime.now());
+      await statsBox.put('dailyMaterialDropCount', kMaxDailyMaterialDrops);
+      final quests = wired(cult);
+      quests.createCustomQuest(
+          title: '杂务', description: 'd', category: '杂务', tier: 1);
+      final q = quests.state.availableQuests.last;
+      quests.acceptQuest(q);
+      cult.applyQuestCompletedRewards(q, random: _FixedRandom(0.0));
+      expect(cult.state.profile.guMaterials, isEmpty);
+    });
+
+    test('日期变化重置计数', () async {
+      final cult = CultivationNotifier(cultivationBox, statsBox);
+      await statsBox.put('lastMaterialDropDay',
+          DateTime.now().subtract(const Duration(days: 1)));
+      await statsBox.put('dailyMaterialDropCount', kMaxDailyMaterialDrops);
+      final quests = wired(cult);
+      quests.createCustomQuest(
+          title: '杂务', description: 'd', category: '杂务', tier: 1);
+      final q = quests.state.availableQuests.last;
+      quests.acceptQuest(q);
+      cult.applyQuestCompletedRewards(q, random: _FixedRandom(0.0));
+      expect(cult.state.profile.guMaterials, isNotEmpty);
+      expect(statsBox.get('dailyMaterialDropCount'), 1);
+    });
+
+    test('未掉落不增加计数', () {
+      final cult = CultivationNotifier(cultivationBox, statsBox);
+      final quests = wired(cult);
+      quests.createCustomQuest(
+          title: '杂务', description: 'd', category: '杂务', tier: 1);
+      final q = quests.state.availableQuests.last;
+      quests.acceptQuest(q);
+      // 转数越界 → 无合法材料 → 不掉落、计数保持 0
+      cult.applyQuestCompletedRewards(q,
+          random: _FixedRandom(0.0), materialDropTurn: 99);
+      expect(cult.state.profile.guMaterials, isEmpty);
+      expect(statsBox.get('dailyMaterialDropCount'), 0);
+    });
+
+    test('重复 completeQuest 不重复掉落', () {
+      final cult = CultivationNotifier(cultivationBox, statsBox);
+      final quests = wired(cult);
+      quests.createCustomQuest(
+          title: '杂务', description: 'd', category: '杂务', tier: 1);
+      final q = quests.state.availableQuests.last;
+      quests.acceptQuest(q);
+      quests.completeQuest(q);
+      final countAfter1 = cult.state.profile.guMaterials
+          .fold<int>(0, (sum, m) => sum + m.quantity);
+      quests.completeQuest(q); // 已完成 → 直接返回
+      final countAfter2 = cult.state.profile.guMaterials
+          .fold<int>(0, (sum, m) => sum + m.quantity);
+      expect(countAfter2, countAfter1);
+    });
+  });
+
+  group('炼蛊 Provider', () {
+    void giveMaterials(CultivationNotifier cult, Map<String, int> mats) {
+      for (final e in mats.entries) {
+        cult.state.profile.guMaterials
+            .add(GuMaterial(materialId: e.key, quantity: e.value));
+      }
+    }
+
+    test('成功扣材料并生成 GuInsect', () {
+      final cult = CultivationNotifier(cultivationBox, statsBox);
+      cult.state.profile.factionRealmExp[DaoKind.lian.index] = 100000;
+      giveMaterials(cult, {'bronze_sand': 5, 'iron_powder': 2});
+
+      final result = cult.refineGuInsect(
+        insectDefinitionId: 'bronze_beetle',
+        random: _FixedRandom(0.0),
+      );
+
+      expect(result.success, isTrue);
+      expect(cult.state.profile.guMaterials
+              .firstWhere((m) => m.materialId == 'bronze_sand').quantity,
+          2);
+      expect(cult.state.profile.guMaterials
+              .firstWhere((m) => m.materialId == 'iron_powder').quantity,
+          1);
+      expect(cult.state.profile.guInsects.length, 1);
+      final insect = cult.state.profile.guInsects.first;
+      expect(insect.definitionId, 'bronze_beetle');
+      expect(insect.quality, inInclusiveRange(0, 1));
+      expect(insect.refinedDaoLevel, FactionLevel.supremeGrandmaster.index);
+    });
+
+    test('失败扣材料但不生成蛊虫', () {
+      final cult = CultivationNotifier(cultivationBox, statsBox);
+      cult.state.profile.factionRealmExp[DaoKind.lian.index] = 100000;
+      giveMaterials(cult, {'bronze_sand': 5, 'iron_powder': 2});
+
+      final result = cult.refineGuInsect(
+        insectDefinitionId: 'bronze_beetle',
+        random: _FixedRandom(1.0),
+      );
+
+      expect(result.success, isFalse);
+      expect(cult.state.profile.guInsects, isEmpty);
+      expect(cult.state.profile.guMaterials
+              .firstWhere((m) => m.materialId == 'bronze_sand').quantity,
+          2);
+      expect(cult.state.profile.guMaterials
+              .firstWhere((m) => m.materialId == 'iron_powder').quantity,
+          1);
+    });
+
+    test('材料不足不修改库存、不生成蛊虫', () {
+      final cult = CultivationNotifier(cultivationBox, statsBox);
+      cult.state.profile.factionRealmExp[DaoKind.lian.index] = 100000;
+      giveMaterials(cult, {'bronze_sand': 1});
+
+      final result = cult.refineGuInsect(
+        insectDefinitionId: 'bronze_beetle',
+        random: _FixedRandom(0.0),
+      );
+
+      expect(result.success, isFalse);
+      expect(result.failureReason, '蛊材不足');
+      expect(cult.state.profile.guMaterials.single.quantity, 1);
+      expect(cult.state.profile.guInsects, isEmpty);
+    });
+
+    test('炼道境界只来自 factionRealmExp，不由 daoTraces 推导', () {
+      // 情形一：道痕 300000、感悟 0 → 炼道普通 → 九转蛊虫成功率 0.26，0.27 必败
+      final cult1 = CultivationNotifier(cultivationBox, statsBox);
+      cult1.state.profile.daoTraces[DaoKind.lian.index] = 300000;
+      giveMaterials(cult1, {'blood_lotus': 20, 'nine_turn_spirit': 5});
+      final r1 = cult1.refineGuInsect(
+        insectDefinitionId: 'nine_turn_worm',
+        random: _FixedRandom(0.27),
+      );
+      expect(r1.success, isFalse);
+
+      // 情形二：道痕 0、感悟 100000 → 炼道无上大宗师 → 成功率 0.42，0.27 必成
+      final cult2 = CultivationNotifier(cultivationBox, statsBox);
+      cult2.state.profile.factionRealmExp[DaoKind.lian.index] = 100000;
+      giveMaterials(cult2, {'blood_lotus': 20, 'nine_turn_spirit': 5});
+      final r2 = cult2.refineGuInsect(
+        insectDefinitionId: 'nine_turn_worm',
+        random: _FixedRandom(0.27),
+      );
+      expect(r2.success, isTrue);
+    });
+  });
+}
+
+/// 固定值 Random，用于确定性控制成功/失败与掉落。
+class _FixedRandom implements Random {
+  final double doubleValue;
+
+  _FixedRandom(this.doubleValue);
+
+  @override
+  double nextDouble() => doubleValue;
+
+  @override
+  int nextInt(int max) => 0;
+
+  @override
+  bool nextBool() => doubleValue < 0.5;
 }

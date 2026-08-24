@@ -17,7 +17,7 @@ class GuMaterialAdapter extends TypeAdapter<GuMaterial> {
       for (int i = 0; i < numOfFields; i++) reader.readByte(): reader.read(),
     };
     return GuMaterial(
-      type: fields[0] as int,
+      materialId: fields[0] as String,
       quantity: fields[1] as int,
     );
   }
@@ -27,7 +27,7 @@ class GuMaterialAdapter extends TypeAdapter<GuMaterial> {
     writer
       ..writeByte(2)
       ..writeByte(0)
-      ..write(obj.type)
+      ..write(obj.materialId)
       ..writeByte(1)
       ..write(obj.quantity);
   }
