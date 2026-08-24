@@ -27,13 +27,16 @@ class PlayerProfileAdapter extends TypeAdapter<PlayerProfile> {
       xianYuan: fields[7] as int,
       factionRealmExp: (fields[9] as Map?)?.cast<int, int>(),
       daoZhu: fields[8] as DaoZhuState?,
+      primaryFaction: fields[10] as int?,
+      nineTurnReached: fields[11] == null ? false : fields[11] as bool,
+      nineTurnBreakthroughAt: fields[12] as DateTime?,
     );
   }
 
   @override
   void write(BinaryWriter writer, PlayerProfile obj) {
     writer
-      ..writeByte(10)
+      ..writeByte(13)
       ..writeByte(0)
       ..write(obj.totalXp)
       ..writeByte(1)
@@ -53,7 +56,13 @@ class PlayerProfileAdapter extends TypeAdapter<PlayerProfile> {
       ..writeByte(8)
       ..write(obj.daoZhu)
       ..writeByte(9)
-      ..write(obj.factionRealmExp);
+      ..write(obj.factionRealmExp)
+      ..writeByte(10)
+      ..write(obj.primaryFaction)
+      ..writeByte(11)
+      ..write(obj.nineTurnReached)
+      ..writeByte(12)
+      ..write(obj.nineTurnBreakthroughAt);
   }
 
   @override

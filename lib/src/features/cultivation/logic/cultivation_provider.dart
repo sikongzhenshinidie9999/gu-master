@@ -12,6 +12,7 @@ import '../data/gu_recipe.dart';
 import '../data/player_profile.dart';
 import 'faction_realm.dart';
 import 'gu_power_service.dart';
+import 'nine_turn_prerequisites.dart';
 import 'material_drop_service.dart';
 import 'refining_config.dart';
 import 'refining_service.dart' as refining;
@@ -31,6 +32,38 @@ class CultivationState {
   final PlayerProfile profile;
 
   const CultivationState({required this.profile});
+}
+
+/// 九转突破结果状态。
+enum NineTurnBreakthroughStatus {
+  succeeded,
+  alreadyReached,
+  failed,
+}
+
+/// 九转突破结果（纯数据）。
+class NineTurnBreakthroughResult {
+  const NineTurnBreakthroughResult({
+    required this.status,
+    this.failureReason,
+    this.nineTurnBreakthroughAt,
+    this.xianYuanAfter,
+  });
+
+  /// 结果状态。
+  final NineTurnBreakthroughStatus status;
+
+  /// 失败/已突破原因（成功时为 null）。
+  final String? failureReason;
+
+  /// 突破时间（成功时非空）。
+  final DateTime? nineTurnBreakthroughAt;
+
+  /// 突破后的仙元（XianYuanType.index；失败时返回当前值）。
+  final int? xianYuanAfter;
+
+  /// 是否成功突破。
+  bool get success => status == NineTurnBreakthroughStatus.succeeded;
 }
 
 /// 修炼领域 Notifier。
@@ -224,6 +257,57 @@ class CultivationNotifier extends StateNotifier<CultivationState> {
       daoTraces: state.profile.daoTraces,
       insects: state.profile.guInsects,
     );
+  }
+
+  /// 尝试九转突破（持久化九转状态）。
+  ///
+  /// - 复用 6A 的 checkNineTurnPrerequisites，不复制四条件判断；
+  /// - [tribulationSatisfied]：尊者级渡劫是否完成，由调用方传入（6C 实现真正计算）；
+  /// - 成功：nineTurnReached=true、nineTurnBreakthroughAt=now、白荔→黄杏质变并保存；
+  /// - 已突破：返回 alreadyReached，不重复突破、不重复质变；
+  /// - 前置不足：返回 failed，状态与仙元不变。
+  NineTurnBreakthroughResult attemptNineTurnBreakthrough({
+    required bool tribulationSatisfied,
+  }) {
+    final profile = state.profile;
+
+    if (profile.nineTurnReached) {
+      return const NineTurnBreakthroughResult(
+        status: NineTurnBreakthroughStatus.alreadyReached,
+        failureReason: '已突破九转',
+      );
+    }
+
+    final prerequisite = checkNineTurnPrerequisites(
+      profile: profile,
+      tribulationSatisfied: tribulationSatisfied,
+    );
+    if (!prerequisite.canBreakthrough) {
+      return NineTurnBreakthroughResult(
+        status: NineTurnBreakthroughStatus.failed,
+        failureReason: _nineTurnFailureReason(prerequisite),
+        xianYuanAfter: profile.xianYuan,
+      );
+    }
+
+    profile.nineTurnReached = true;
+    profile.nineTurnBreakthroughAt = DateTime.now();
+    profile.xianYuan = XianYuanType.huangxing.index;
+    saveProfile(profile);
+
+    return NineTurnBreakthroughResult(
+      status: NineTurnBreakthroughStatus.succeeded,
+      nineTurnBreakthroughAt: profile.nineTurnBreakthroughAt,
+      xianYuanAfter: profile.xianYuan,
+    );
+  }
+
+  String _nineTurnFailureReason(NineTurnPrerequisiteResult r) {
+    if (!r.daoTracesSatisfied) return '主修流派道痕不足';
+    if (!r.factionRealmSatisfied) return '主修流派境界未达无上大宗师';
+    if (!r.xianYuanSatisfied) return '仙元不是白荔仙元';
+    if (!r.tribulationSatisfied) return '未完成尊者级渡劫';
+    return '九转前置条件未满足';
   }
 }
 

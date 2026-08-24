@@ -69,6 +69,23 @@ class PlayerProfile extends HiveObject {
   @HiveField(9)
   Map<int, int> factionRealmExp;
 
+  /// 主修流派（Faction.index；null = 未指定，由 6A resolvePrimaryFaction 派生）。
+  ///
+  /// 仅作为显式偏好，不作为「已九转」的判断依据；旧玩家缺失时回退派生。
+  @HiveField(10)
+  int? primaryFaction;
+
+  /// 是否已真正突破九转（唯一事实来源）。
+  ///
+  /// 绝不能由 realm totalXp / FactionLevel / daoTraces / factionRealmExp /
+  /// xianYuan 中的任何单一条件代替。
+  @HiveField(11, defaultValue: false)
+  bool nineTurnReached;
+
+  /// 九转突破时间。
+  @HiveField(12)
+  DateTime? nineTurnBreakthroughAt;
+
   PlayerProfile({
     this.totalXp = 0,
     this.currentCultivation = 0,
@@ -80,6 +97,9 @@ class PlayerProfile extends HiveObject {
     this.xianYuan = 0,
     Map<int, int>? factionRealmExp,
     this.daoZhu,
+    this.primaryFaction,
+    this.nineTurnReached = false,
+    this.nineTurnBreakthroughAt,
   })  : daoTraces = daoTraces ?? {},
         factionLevels = factionLevels ?? {},
         factionRealmExp = factionRealmExp ?? {},
