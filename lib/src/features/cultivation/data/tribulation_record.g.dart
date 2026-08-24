@@ -20,19 +20,22 @@ class TribulationRecordAdapter extends TypeAdapter<TribulationRecord> {
       realmLevel: fields[0] as int,
       stageIndex: fields[1] as int,
       failCount: fields[2] as int,
+      lastAttemptAt: fields[3] as DateTime?,
     );
   }
 
   @override
   void write(BinaryWriter writer, TribulationRecord obj) {
     writer
-      ..writeByte(3)
+      ..writeByte(4)
       ..writeByte(0)
       ..write(obj.realmLevel)
       ..writeByte(1)
       ..write(obj.stageIndex)
       ..writeByte(2)
-      ..write(obj.failCount);
+      ..write(obj.failCount)
+      ..writeByte(3)
+      ..write(obj.lastAttemptAt);
   }
 
   @override

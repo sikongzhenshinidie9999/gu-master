@@ -10,6 +10,7 @@ import '../data/gu_insect.dart';
 import '../data/gu_material.dart';
 import '../data/gu_recipe.dart';
 import '../data/player_profile.dart';
+import '../data/tribulation_record.dart';
 import 'faction_realm.dart';
 import 'gu_power_service.dart';
 import 'nine_turn_prerequisites.dart';
@@ -17,6 +18,8 @@ import 'material_drop_service.dart';
 import 'refining_config.dart';
 import 'refining_service.dart' as refining;
 import 'reward_calculator.dart';
+import 'tribulation_config.dart';
+import 'tribulation_service.dart' as tribulation;
 
 /// 判断两个日期是否为同一天。
 bool _isSameDay(DateTime a, DateTime b) =>
@@ -308,6 +311,78 @@ class CultivationNotifier extends StateNotifier<CultivationState> {
     if (!r.xianYuanSatisfied) return '仙元不是白荔仙元';
     if (!r.tribulationSatisfied) return '未完成尊者级渡劫';
     return '九转前置条件未满足';
+  }
+
+  /// 尝试渡劫（持久化渡劫状态）。
+  ///
+  /// - 复用 TribulationService 纯逻辑，不复制成功率/惩罚公式；
+  /// - [now] / [random] 为测试钩子（时间与随机可注入）；
+  /// - 失败：failCount++、lastAttemptAt=now、currentCultivation -= 目标转数跨度/3（clamp≥0）；
+  /// - 成功：推进小阶（普通 0→1→2→3、尊者 0→3），failCount 重置 0，lastAttemptAt=now；
+  /// - 冷却中 / 非法参数：不写 Hive、不改状态；
+  /// - 绝不修改 totalXp / daoTraces / factionRealmExp / nineTurnReached / xianYuan / daoZhu。
+  tribulation.TribulationResult attemptTribulation({
+    required int realmLevel,
+    required int stageIndex,
+    DateTime? now,
+    Random? random,
+  }) {
+    final profile = state.profile;
+    final nowDt = now ?? DateTime.now();
+
+    // 查找 (realmLevel, stageIndex) 记录；历史重复 key 取第一条有效记录
+    final existing = profile.tribulations
+        .where((r) => r.realmLevel == realmLevel && r.stageIndex == stageIndex)
+        .firstOrNull;
+    final failCount = existing?.failCount ?? 0;
+    final lastAttemptAt = existing?.lastAttemptAt;
+
+    final result = tribulation.attemptTribulation(
+      realmLevel: realmLevel,
+      stageIndex: stageIndex,
+      failCount: failCount,
+      now: nowDt,
+      realmSpan: tribulationRealmSpan(realmLevel),
+      lastAttemptAt: lastAttemptAt,
+      random: random,
+    );
+
+    // 冷却 / 非法：不写 Hive、不改状态
+    if (result.outcome == tribulation.TribulationOutcome.invalid ||
+        result.outcome == tribulation.TribulationOutcome.onCooldown) {
+      return result;
+    }
+
+    if (!result.success) {
+      // 失败：failCount++、lastAttemptAt=now、currentCultivation 扣减（clamp≥0）
+      if (existing != null) {
+        existing.failCount = result.failCount;
+        existing.lastAttemptAt = nowDt;
+      } else {
+        profile.tribulations.add(TribulationRecord(
+          realmLevel: realmLevel,
+          stageIndex: stageIndex,
+          failCount: result.failCount,
+          lastAttemptAt: nowDt,
+        ));
+      }
+      profile.currentCultivation =
+          max(0, profile.currentCultivation - result.cultivationPenalty);
+      saveProfile(profile);
+      return result;
+    }
+
+    // 成功：移除当前 stage 记录（含历史重复），写入唯一 nextStageIndex 记录
+    profile.tribulations.removeWhere(
+        (r) => r.realmLevel == realmLevel && r.stageIndex == stageIndex);
+    profile.tribulations.add(TribulationRecord(
+      realmLevel: realmLevel,
+      stageIndex: result.nextStageIndex,
+      failCount: result.failCount, // 成功 → 0
+      lastAttemptAt: nowDt,
+    ));
+    saveProfile(profile);
+    return result;
   }
 }
 

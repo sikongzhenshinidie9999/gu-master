@@ -12,7 +12,7 @@ class TribulationRecord {
   @HiveField(0)
   final int realmLevel;
 
-  /// 小阶索引：0=1/3，1=2/3，2=3/3。
+  /// 小阶索引：0=1/3，1=2/3，2=3/3，3=该转渡劫已完成（终点 sentinel，非第四次渡劫）。
   @HiveField(1)
   final int stageIndex;
 
@@ -20,9 +20,14 @@ class TribulationRecord {
   @HiveField(2)
   int failCount;
 
+  /// 最近一次尝试时间（冷却用；null = 从未尝试）。
+  @HiveField(3)
+  DateTime? lastAttemptAt;
+
   TribulationRecord({
     required this.realmLevel,
     required this.stageIndex,
     this.failCount = 0,
+    this.lastAttemptAt,
   });
 }
