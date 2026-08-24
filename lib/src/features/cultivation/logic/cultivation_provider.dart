@@ -6,11 +6,13 @@ import 'package:sidequest/src/features/quests/data/quest_model.dart';
 import 'package:uuid/uuid.dart';
 
 import '../data/dao.dart';
+import '../data/dao_zhu.dart';
 import '../data/gu_insect.dart';
 import '../data/gu_material.dart';
 import '../data/gu_recipe.dart';
 import '../data/player_profile.dart';
 import '../data/tribulation_record.dart';
+import 'dao_zhu_service.dart';
 import 'faction_realm.dart';
 import 'gu_power_service.dart';
 import 'nine_turn_prerequisites.dart';
@@ -67,6 +69,38 @@ class NineTurnBreakthroughResult {
 
   /// 是否成功突破。
   bool get success => status == NineTurnBreakthroughStatus.succeeded;
+}
+
+/// 道主授予结果状态。
+enum DaoZhuGrantStatus {
+  succeeded,
+  alreadyGranted,
+  failed,
+}
+
+/// 道主授予结果（纯数据）。
+class DaoZhuGrantResult {
+  const DaoZhuGrantResult({
+    required this.status,
+    this.failureReason,
+    this.daoZhu,
+    this.crownedAt,
+  });
+
+  /// 结果状态。
+  final DaoZhuGrantStatus status;
+
+  /// 失败/已授予原因（成功时为 null）。
+  final String? failureReason;
+
+  /// 授予后的道主记录（成功时非空）。
+  final DaoZhuState? daoZhu;
+
+  /// 授予时间（成功时非空）。
+  final DateTime? crownedAt;
+
+  /// 是否成功授予。
+  bool get success => status == DaoZhuGrantStatus.succeeded;
 }
 
 /// 修炼领域 Notifier。
@@ -279,6 +313,31 @@ class CultivationNotifier extends StateNotifier<CultivationState> {
         tribulationSatisfied: nineTurnTribulationSatisfied,
       );
 
+  /// 道主资格（只读派生，不写 Hive、不改状态）。
+  ///
+  /// 复用 6E-1 纯逻辑 checkDaoZhuEligibility，不复制资格判断公式；
+  /// 默认查看流派 = resolvePrimaryFaction（无主修流派时安全返回不可授予）；
+  /// isDeepestUnderstanding 恒为 false（不自行推导「当世理解最深」）。
+  DaoZhuEligibility get daoZhuEligibility {
+    final primary = resolvePrimaryFaction(state.profile);
+    if (primary == null) {
+      final already = state.profile.daoZhu != null;
+      return DaoZhuEligibility(
+        nineTurnSatisfied: state.profile.nineTurnReached,
+        factionRealmSatisfied: false,
+        daoTracesSatisfied: false,
+        deepestUnderstandingSatisfied: false,
+        alreadyGranted: already,
+        canGrant: false,
+        failureReason: already ? '已成为道主' : '未指定主修流派',
+      );
+    }
+    return checkDaoZhuEligibility(
+      profile: state.profile,
+      faction: primary,
+    );
+  }
+
   /// 尝试九转突破（持久化九转状态）。
   ///
   /// - 复用 6A 的 checkNineTurnPrerequisites，不复制四条件判断；
@@ -328,6 +387,56 @@ class CultivationNotifier extends StateNotifier<CultivationState> {
     if (!r.xianYuanSatisfied) return '仙元不是白荔仙元';
     if (!r.tribulationSatisfied) return '未完成尊者级渡劫';
     return '九转前置条件未满足';
+  }
+
+  /// 显式授予道主（持久化 daoZhu）。
+  ///
+  /// - 复用 6E-1 纯逻辑 checkDaoZhuEligibility，不复制资格判断公式；
+  /// - 已授予：返回 alreadyGranted，绝不覆盖原 daoZhu（即使传入不同 faction/eraId/now）；
+  /// - 资格不足：返回 failed + failureReason，不创建、不修改、不保存；
+  /// - 成功：写入 profile.daoZhu = DaoZhuState(faction, crownedAt, eraId) 并 saveProfile；
+  /// - 只新增 daoZhu，绝不修改 nineTurnReached / nineTurnBreakthroughAt / xianYuan /
+  ///   daoTraces / factionRealmExp / currentCultivation / totalXp / tribulations /
+  ///   guInsects / guMaterials 等其他字段。
+  DaoZhuGrantResult grantDaoZhu({
+    required Faction faction,
+    required bool isDeepestUnderstanding,
+    String? eraId,
+    DateTime? now,
+  }) {
+    final profile = state.profile;
+    final eligibility = checkDaoZhuEligibility(
+      profile: profile,
+      faction: faction,
+      isDeepestUnderstanding: isDeepestUnderstanding,
+    );
+
+    if (eligibility.alreadyGranted) {
+      return DaoZhuGrantResult(
+        status: DaoZhuGrantStatus.alreadyGranted,
+        failureReason: eligibility.failureReason,
+      );
+    }
+    if (!eligibility.canGrant) {
+      return DaoZhuGrantResult(
+        status: DaoZhuGrantStatus.failed,
+        failureReason: eligibility.failureReason ?? '道主资格未满足',
+      );
+    }
+
+    final crownedAt = now ?? DateTime.now();
+    profile.daoZhu = DaoZhuState(
+      faction: faction.index,
+      crownedAt: crownedAt,
+      eraId: eraId ?? '',
+    );
+    saveProfile(profile);
+
+    return DaoZhuGrantResult(
+      status: DaoZhuGrantStatus.succeeded,
+      daoZhu: profile.daoZhu,
+      crownedAt: crownedAt,
+    );
   }
 
   /// 尝试渡劫（持久化渡劫状态）。

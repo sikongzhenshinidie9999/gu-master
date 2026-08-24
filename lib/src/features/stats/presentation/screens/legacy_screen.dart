@@ -10,6 +10,7 @@ import 'package:sidequest/src/features/cultivation/data/player_profile.dart';
 import 'package:sidequest/src/features/cultivation/data/tribulation_record.dart';
 import 'package:sidequest/src/features/cultivation/logic/cultivation_provider.dart';
 import 'package:sidequest/src/features/cultivation/logic/faction_realm.dart';
+import 'package:sidequest/src/features/cultivation/logic/nine_turn_prerequisites.dart';
 import 'package:sidequest/src/features/cultivation/logic/refining_service.dart';
 import 'package:sidequest/src/features/cultivation/logic/tribulation_config.dart';
 import 'package:sidequest/src/features/cultivation/logic/tribulation_service.dart';
@@ -42,6 +43,8 @@ class LegacyScreen extends ConsumerWidget {
           _buildFactionRealms(context, cultivationState.profile),
           const SizedBox(height: 20),
           _buildNineTurnCard(context, cultivationState.profile, cultivationNotifier),
+          const SizedBox(height: 20),
+          _buildDaoZhuCard(context, cultivationState.profile, cultivationNotifier),
           const SizedBox(height: 20),
           _buildTribulationCard(
               context, cultivationState.profile, cultivationNotifier),
@@ -476,6 +479,101 @@ class LegacyScreen extends ConsumerWidget {
       case NineTurnBreakthroughStatus.failed:
         showAppSnackBar(
             context, '九转突破失败：${result.failureReason ?? '前置条件未满足'}');
+        break;
+    }
+  }
+
+  Widget _buildDaoZhuCard(BuildContext context, PlayerProfile profile,
+      CultivationNotifier cultivationNotifier) {
+    final daoZhu = profile.daoZhu;
+    if (daoZhu != null) {
+      // 已授予：道主身份（唯一来源 profile.daoZhu；九转蛊尊与道主是独立概念）
+      return GlassCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.workspace_premium_rounded, size: 20),
+                SizedBox(width: 8),
+                Text(
+                  '道主',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _prereqRow('道主流派', _factionLabel(daoZhu.faction)),
+            _prereqRow(
+                '授予时间', DateFormat('yyyy-MM-dd HH:mm').format(daoZhu.crownedAt)),
+            if (daoZhu.eraId.isNotEmpty) _prereqRow('时代', daoZhu.eraId),
+            _prereqRow('状态', '已授予'),
+          ],
+        ),
+      );
+    }
+
+    // 未授予：道主资格（只消费 Provider 只读 getter，不复制资格公式）
+    final primary = resolvePrimaryFaction(profile);
+    final eligibility = cultivationNotifier.daoZhuEligibility;
+    return GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.workspace_premium_rounded, size: 20),
+              SizedBox(width: 8),
+              Text(
+                '道主',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _prereqRow('授予流派', primary?.label ?? '尚未确定主修流派'),
+          _prereqRow('九转', eligibility.nineTurnSatisfied ? '✓' : '✗'),
+          _prereqRow('流派境界', eligibility.factionRealmSatisfied ? '✓' : '✗'),
+          _prereqRow('道痕', eligibility.daoTracesSatisfied ? '✓' : '✗'),
+          _prereqRow('当世理解最深',
+              eligibility.deepestUnderstandingSatisfied ? '✓' : '✗'),
+          _prereqRow('总体资格', eligibility.canGrant ? '✓' : '✗'),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              // 无主修流派禁止授予；deepest 恒 false（无真实来源，不虚构业务事实）
+              onPressed: primary == null
+                  ? null
+                  : () {
+                      final result = cultivationNotifier.grantDaoZhu(
+                        faction: primary,
+                        isDeepestUnderstanding: false,
+                      );
+                      _showDaoZhuResult(context, result);
+                    },
+              child: const Text('尝试授予道主'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDaoZhuResult(BuildContext context, DaoZhuGrantResult result) {
+    switch (result.status) {
+      case DaoZhuGrantStatus.succeeded:
+        final label = result.daoZhu == null
+            ? ''
+            : _factionLabel(result.daoZhu!.faction);
+        showAppSnackBar(context, '道主授予成功 · $label');
+        break;
+      case DaoZhuGrantStatus.alreadyGranted:
+        showAppSnackBar(context, '已经是道主');
+        break;
+      case DaoZhuGrantStatus.failed:
+        showAppSnackBar(
+            context, '道主授予失败：${result.failureReason ?? '资格未满足'}');
         break;
     }
   }

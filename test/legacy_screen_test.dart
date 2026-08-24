@@ -578,4 +578,231 @@ void main() {
     expect(find.text('九转蛊尊'), findsOneWidget);
     expect(find.text('八转巅峰 · 待突破'), findsNothing);
   });
+
+  // ================= 6E-3：道主 UI =================
+
+  testWidgets('未成为道主时显示道主资格卡', (tester) async {
+    await initEnv(tester);
+    await tester.runAsync(() => cultivationBox.add(PlayerProfile()));
+    await pumpLegacy(tester);
+    expect(find.text('尝试授予道主'), findsOneWidget);
+    expect(find.text('总体资格：✗'), findsOneWidget);
+  });
+
+  testWidgets('九转不足显示 ✗', (tester) async {
+    await initEnv(tester);
+    final profile = PlayerProfile(
+      daoTraces: {DaoKind.li.index: _kNineTurnDaoTraces},
+      factionRealmExp: {Faction.li.daoKind.index: _kSupremeGrandmasterRealmExp},
+      nineTurnReached: false,
+    );
+    await tester.runAsync(() => cultivationBox.add(profile));
+    await pumpLegacy(tester);
+    expect(find.text('九转：✗'), findsOneWidget);
+  });
+
+  testWidgets('流派境界不足显示 ✗', (tester) async {
+    await initEnv(tester);
+    final profile = PlayerProfile(
+      daoTraces: {DaoKind.li.index: _kNineTurnDaoTraces},
+      factionRealmExp: {Faction.li.daoKind.index: 100},
+      nineTurnReached: true,
+    );
+    await tester.runAsync(() => cultivationBox.add(profile));
+    await pumpLegacy(tester);
+    expect(find.text('流派境界：✗'), findsOneWidget);
+  });
+
+  testWidgets('道痕不足显示 ✗', (tester) async {
+    await initEnv(tester);
+    final profile = PlayerProfile(
+      daoTraces: {DaoKind.li.index: 100},
+      factionRealmExp: {Faction.li.daoKind.index: _kSupremeGrandmasterRealmExp},
+      nineTurnReached: true,
+    );
+    await tester.runAsync(() => cultivationBox.add(profile));
+    await pumpLegacy(tester);
+    expect(find.text('道痕：✗'), findsOneWidget);
+  });
+
+  testWidgets('当世理解最深默认显示 ✗', (tester) async {
+    await initEnv(tester);
+    final profile = PlayerProfile(
+      daoTraces: {DaoKind.li.index: _kNineTurnDaoTraces},
+      factionRealmExp: {Faction.li.daoKind.index: _kSupremeGrandmasterRealmExp},
+      nineTurnReached: true,
+    );
+    await tester.runAsync(() => cultivationBox.add(profile));
+    await pumpLegacy(tester);
+    expect(find.text('当世理解最深：✗'), findsOneWidget);
+  });
+
+  testWidgets('可评估资格全部满足：九转/境界/道痕 ✓，理解最深 ✗（无真实来源）', (tester) async {
+    await initEnv(tester);
+    final profile = PlayerProfile(
+      daoTraces: {DaoKind.li.index: _kNineTurnDaoTraces},
+      factionRealmExp: {Faction.li.daoKind.index: _kSupremeGrandmasterRealmExp},
+      nineTurnReached: true,
+    );
+    await tester.runAsync(() => cultivationBox.add(profile));
+    await pumpLegacy(tester);
+    expect(find.text('九转：✓'), findsOneWidget);
+    expect(find.text('流派境界：✓'), findsOneWidget);
+    expect(find.text('道痕：✓'), findsOneWidget);
+    expect(find.text('当世理解最深：✗'), findsOneWidget);
+    expect(find.text('总体资格：✗'), findsOneWidget);
+  });
+
+  testWidgets('已有 daoZhu 时显示道主身份', (tester) async {
+    await initEnv(tester);
+    final profile = PlayerProfile(
+      daoZhu: DaoZhuState(
+        faction: Faction.li.index,
+        crownedAt: DateTime(2026, 8, 24, 12, 0),
+        eraId: 'era-1',
+      ),
+    );
+    await tester.runAsync(() => cultivationBox.add(profile));
+    await pumpLegacy(tester);
+    expect(find.text('状态：已授予'), findsOneWidget);
+    expect(find.text('道主流派：力道流派'), findsOneWidget);
+    expect(find.text('授予时间：2026-08-24 12:00'), findsOneWidget);
+    expect(find.text('时代：era-1'), findsOneWidget);
+    expect(find.text('尝试授予道主'), findsNothing);
+  });
+
+  testWidgets('eraId 为空时不显示时代行', (tester) async {
+    await initEnv(tester);
+    final profile = PlayerProfile(
+      daoZhu: DaoZhuState(
+        faction: Faction.zhi.index,
+        crownedAt: DateTime(2026, 8, 24, 12, 0),
+        eraId: '',
+      ),
+    );
+    await tester.runAsync(() => cultivationBox.add(profile));
+    await pumpLegacy(tester);
+    expect(find.text('道主流派：智道流派'), findsOneWidget);
+    expect(find.textContaining('时代'), findsNothing);
+  });
+
+  testWidgets('没有主修流派时按钮不可授予', (tester) async {
+    await initEnv(tester);
+    await tester.runAsync(() => cultivationBox.add(PlayerProfile()));
+    await pumpLegacy(tester);
+    expect(find.text('授予流派：尚未确定主修流派'), findsOneWidget);
+    final button = tester.widget<ElevatedButton>(
+        find.widgetWithText(ElevatedButton, '尝试授予道主'));
+    expect(button.onPressed, isNull);
+  });
+
+  testWidgets('点击授予且 deepest=false → 显示失败原因', (tester) async {
+    await initEnv(tester);
+    final profile = PlayerProfile(
+      daoTraces: {DaoKind.li.index: _kNineTurnDaoTraces},
+      factionRealmExp: {Faction.li.daoKind.index: _kSupremeGrandmasterRealmExp},
+      nineTurnReached: true,
+    );
+    await tester.runAsync(() => cultivationBox.add(profile));
+    await pumpLegacy(tester);
+    await tester.ensureVisible(find.text('尝试授予道主'));
+    await tester.pump();
+    await tester.tap(find.text('尝试授予道主'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(find.text('道主授予失败：当世理解最深未满足'), findsOneWidget);
+  });
+
+  testWidgets('已经是道主时无授予入口', (tester) async {
+    await initEnv(tester);
+    final profile = PlayerProfile(
+      daoZhu: DaoZhuState(
+        faction: Faction.li.index,
+        crownedAt: DateTime(2026, 8, 24),
+        eraId: 'era-1',
+      ),
+    );
+    await tester.runAsync(() => cultivationBox.add(profile));
+    await pumpLegacy(tester);
+    expect(find.text('状态：已授予'), findsOneWidget);
+    expect(find.text('尝试授予道主'), findsNothing);
+  });
+
+  testWidgets('道主授予成功后 UI 自动 rebuild（无需重新 pump）', (tester) async {
+    await initEnv(tester);
+    final profile = PlayerProfile(
+      daoTraces: {DaoKind.li.index: _kNineTurnDaoTraces},
+      factionRealmExp: {Faction.li.daoKind.index: _kSupremeGrandmasterRealmExp},
+      nineTurnReached: true,
+    );
+    await tester.runAsync(() => cultivationBox.add(profile));
+    await pumpLegacy(tester);
+    expect(find.text('总体资格：✗'), findsOneWidget);
+
+    // 通过 Provider 真实 API 走成功路径（UI 无真实 deepest 来源，测试不虚构业务事实）
+    final notifier = container.read(cultivationProvider.notifier);
+    final result = notifier.grantDaoZhu(
+      faction: Faction.li,
+      isDeepestUnderstanding: true,
+      eraId: 'era-1',
+      now: DateTime(2026, 8, 24, 12, 0),
+    );
+    expect(result.success, isTrue);
+    await tester.pump();
+
+    // 不重新 pump LegacyScreen，仅靠 ref.watch(cultivationProvider) 自动重建
+    expect(find.text('状态：已授予'), findsOneWidget);
+    expect(find.text('道主流派：力道流派'), findsOneWidget);
+    expect(find.text('总体资格：✗'), findsNothing);
+  });
+
+  testWidgets('九转蛊尊不会因九转突破自动显示道主', (tester) async {
+    await initEnv(tester);
+    final profile = PlayerProfile(
+      nineTurnReached: true,
+      nineTurnBreakthroughAt: DateTime(2026, 8, 24, 12, 0),
+    );
+    await tester.runAsync(() => cultivationBox.add(profile));
+    await pumpLegacy(tester);
+    expect(find.text('九转蛊尊'), findsOneWidget); // 名义展示为真实九转
+    expect(find.text('尝试授予道主'), findsOneWidget); // 仍是资格卡
+    expect(find.text('状态：已授予'), findsNothing); // 未自动成为道主
+  });
+
+  testWidgets('高道痕+无上大宗师+九转，但 deepest=false → 仍不能授予', (tester) async {
+    await initEnv(tester);
+    final profile = PlayerProfile(
+      daoTraces: {DaoKind.li.index: _kNineTurnDaoTraces},
+      factionRealmExp: {Faction.li.daoKind.index: _kSupremeGrandmasterRealmExp},
+      nineTurnReached: true,
+    );
+    await tester.runAsync(() => cultivationBox.add(profile));
+    await pumpLegacy(tester);
+    expect(find.text('九转：✓'), findsOneWidget);
+    expect(find.text('流派境界：✓'), findsOneWidget);
+    expect(find.text('道痕：✓'), findsOneWidget);
+    expect(find.text('当世理解最深：✗'), findsOneWidget);
+    expect(find.text('总体资格：✗'), findsOneWidget);
+    await tester.ensureVisible(find.text('尝试授予道主'));
+    await tester.pump();
+    await tester.tap(find.text('尝试授予道主'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(find.text('道主授予失败：当世理解最深未满足'), findsOneWidget);
+  });
+
+  testWidgets('UI 不复制资格公式：高道痕+低境界显示混合结果', (tester) async {
+    await initEnv(tester);
+    final profile = PlayerProfile(
+      daoTraces: {DaoKind.li.index: _kNineTurnDaoTraces},
+      factionRealmExp: {Faction.li.daoKind.index: 100},
+      nineTurnReached: true,
+    );
+    await tester.runAsync(() => cultivationBox.add(profile));
+    await pumpLegacy(tester);
+    // UI 只消费 getter：道痕满足、境界不满足，二者独立显示
+    expect(find.text('道痕：✓'), findsOneWidget);
+    expect(find.text('流派境界：✗'), findsOneWidget);
+    expect(find.text('总体资格：✗'), findsOneWidget);
+  });
 }
