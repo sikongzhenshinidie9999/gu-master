@@ -14,6 +14,7 @@ import 'package:sidequest/src/features/cultivation/data/tribulation_record.dart'
 import 'package:sidequest/src/features/cultivation/logic/cultivation_provider.dart';
 import 'package:sidequest/src/features/cultivation/logic/faction_realm.dart';
 import 'package:sidequest/src/features/cultivation/logic/refining_config.dart';
+import 'package:sidequest/src/features/cultivation/logic/reward_calculator.dart';
 import 'package:sidequest/src/features/cultivation/logic/reward_config.dart';
 import 'package:sidequest/src/features/quests/logic/quest_provider.dart';
 import 'package:sidequest/src/features/quests/data/quest_model.dart';
@@ -369,6 +370,99 @@ void main() {
       final countAfter2 = cult.state.profile.guMaterials
           .fold<int>(0, (sum, m) => sum + m.quantity);
       expect(countAfter2, countAfter1);
+    });
+  });
+
+  group('applyCultivationGains 共享奖励入口', () {
+    test('道痕与流派感悟增加', () {
+      final cult = CultivationNotifier(cultivationBox, statsBox);
+      cult.applyCultivationGains(
+        daoKind: DaoKind.li,
+        daoTraceAmount: 20,
+        realmExpGain: 8,
+      );
+      final p = cult.state.profile;
+      expect(p.daoTraces[DaoKind.li.index], 20);
+      expect(p.factionRealmExp[Faction.li.daoKind.index], 8);
+    });
+
+    test('daoKind 为 null 时不增加道痕/感悟，但保留蛊材掉落入口', () {
+      final cult = CultivationNotifier(cultivationBox, statsBox);
+      cult.applyCultivationGains(
+        daoKind: null,
+        daoTraceAmount: 10,
+        realmExpGain: 10,
+      );
+      final p = cult.state.profile;
+      expect(p.daoTraces, isEmpty);
+      expect(p.factionRealmExp, isEmpty);
+      // 无流派奖励（如杂务）仍可掉落蛊材
+      expect(p.guMaterials, isNotEmpty);
+    });
+
+    test('applyMaterialDrop=false 时不触发蛊材掉落', () {
+      final cult = CultivationNotifier(cultivationBox, statsBox);
+      cult.applyCultivationGains(
+        daoKind: DaoKind.li,
+        daoTraceAmount: 10,
+        realmExpGain: 0,
+        applyMaterialDrop: false,
+      );
+      expect(cult.state.profile.guMaterials, isEmpty);
+    });
+
+    test('蛊材掉落入口一致：相同 materialId 正确堆叠', () {
+      final cult = CultivationNotifier(cultivationBox, statsBox);
+      for (var i = 0; i < 2; i++) {
+        cult.applyCultivationGains(
+          daoKind: DaoKind.li,
+          daoTraceAmount: 5,
+          realmExpGain: 2,
+          random: _FixedRandom(0.0),
+        );
+      }
+      final bronze = cult.state.profile.guMaterials
+          .where((m) => m.materialId == 'bronze_sand')
+          .toList();
+      expect(bronze.length, 1);
+      expect(bronze.first.quantity, 2);
+    });
+
+    test('不改变原任务奖励结果：任务路径与共享入口路径一致', () {
+      final quest = QuestModel(
+        id: 'q_1',
+        title: '炼体',
+        description: 'd',
+        tier: 2,
+        createdAt: DateTime(2026, 1, 1),
+        category: '炼体',
+      );
+
+      // 任务路径
+      final cult1 = CultivationNotifier(cultivationBox, statsBox);
+      cult1.applyQuestCompletedRewards(quest, random: _FixedRandom(0.0));
+
+      // 共享入口路径（等价参数）
+      final cult2 = CultivationNotifier(cultivationBox, statsBox);
+      final reward = computeCultivationReward(quest);
+      cult2.applyCultivationGains(
+        daoKind: reward.daoKind,
+        daoTraceAmount: reward.daoTraceAmount,
+        realmExpGain: reward.realmExpGain,
+        random: _FixedRandom(0.0),
+      );
+
+      final p1 = cult1.state.profile;
+      final p2 = cult2.state.profile;
+      expect(p2.daoTraces[DaoKind.li.index], p1.daoTraces[DaoKind.li.index]);
+      expect(
+        p2.factionRealmExp[Faction.li.daoKind.index],
+        p1.factionRealmExp[Faction.li.daoKind.index],
+      );
+      expect(
+        p2.guMaterials.fold<int>(0, (sum, m) => sum + m.quantity),
+        p1.guMaterials.fold<int>(0, (sum, m) => sum + m.quantity),
+      );
     });
   });
 

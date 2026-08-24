@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:sidequest/src/features/quests/data/quest_model.dart';
+import 'package:sidequest/src/features/stats/logic/realm.dart';
 import 'package:uuid/uuid.dart';
 
 import '../data/dao.dart';
@@ -22,6 +23,7 @@ import 'refining_service.dart' as refining;
 import 'reward_calculator.dart';
 import 'tribulation_config.dart';
 import 'tribulation_service.dart' as tribulation;
+import 'tribulation_trigger.dart';
 
 /// 判断两个日期是否为同一天。
 bool _isSameDay(DateTime a, DateTime b) =>
@@ -136,32 +138,63 @@ class CultivationNotifier extends StateNotifier<CultivationState> {
 
   /// 完成任务后的修炼奖励（由 QuestNotifier 回调触发，每次完成只执行一次）。
   ///
-  /// - 道痕（力量）与流派感悟（境界成长）分别写入两个独立数据源，互不换算；
-  /// - 附加蛊材掉落（每日上限由 stats Box 记录，见 _applyMaterialDrop）；
-  /// - 不影响 totalXp、streak、weeklyHistory 与任务完成主流程。
-  ///
-  /// [random] / [materialDropTurn] 为测试钩子：掉落随机可注入、掉落转数可覆盖。
+  /// 计算任务奖励后委托给共享入口 [applyCultivationGains]；
+  /// 不影响 totalXp、streak、weeklyHistory 与任务完成主流程。
   void applyQuestCompletedRewards(
     QuestModel quest, {
     Random? random,
     int? materialDropTurn,
   }) {
     final reward = computeCultivationReward(quest);
+    applyCultivationGains(
+      daoKind: reward.daoKind,
+      daoTraceAmount: reward.daoTraceAmount,
+      realmExpGain: reward.realmExpGain,
+      currentCultivationGain: quest.xpReward,
+      applyMaterialDrop: true,
+      random: random,
+      materialDropTurn: materialDropTurn,
+    );
+  }
+
+  /// 通用修炼奖励入口（任务与未来闭关共用）。
+  ///
+  /// - 道痕（力量）与流派感悟（境界成长）分别写入两个独立数据源，互不换算；
+  /// - [daoKind] 为 null 时无流派奖励（道痕/感悟均不增加）；
+  /// - 附加蛊材掉落（每日上限由 stats Box 记录，见 _applyMaterialDrop），
+  ///   可用 [applyMaterialDrop] 关闭；
+  /// - 仅在任一奖励生效时保存 profile；不影响 totalXp。
+  ///
+  /// [random] / [materialDropTurn] 为测试钩子：掉落随机可注入、掉落转数可覆盖。
+  void applyCultivationGains({
+    required DaoKind? daoKind,
+    required int daoTraceAmount,
+    required int realmExpGain,
+    int currentCultivationGain = 0,
+    bool applyMaterialDrop = true,
+    Random? random,
+    int? materialDropTurn,
+  }) {
     final profile = state.profile;
     var changed = false;
 
-    final kind = reward.daoKind;
-    if (reward.hasDaoTrace && kind != null) {
-      profile.daoTraces[kind.index] =
-          (profile.daoTraces[kind.index] ?? 0) + reward.daoTraceAmount;
+    if (currentCultivationGain > 0) {
+      // 当前修为随任务/闭关同步增长（累计修为 totalXp 由 statsBox 单独维护）
+      profile.currentCultivation += currentCultivationGain;
       changed = true;
     }
-    if (reward.hasRealmExp && kind != null) {
-      profile.factionRealmExp[kind.index] =
-          (profile.factionRealmExp[kind.index] ?? 0) + reward.realmExpGain;
+    if (daoKind != null && daoTraceAmount > 0) {
+      profile.daoTraces[daoKind.index] =
+          (profile.daoTraces[daoKind.index] ?? 0) + daoTraceAmount;
       changed = true;
     }
-    if (_applyMaterialDrop(profile, random: random, turn: materialDropTurn)) {
+    if (daoKind != null && realmExpGain > 0) {
+      profile.factionRealmExp[daoKind.index] =
+          (profile.factionRealmExp[daoKind.index] ?? 0) + realmExpGain;
+      changed = true;
+    }
+    if (applyMaterialDrop &&
+        _applyMaterialDrop(profile, random: random, turn: materialDropTurn)) {
       changed = true;
     }
 
@@ -438,6 +471,37 @@ class CultivationNotifier extends StateNotifier<CultivationState> {
       crownedAt: crownedAt,
     );
   }
+
+  /// 当前转数（由 statsBox totalXp 派生；累计修为唯一权威）。
+  int get currentRealmLevel {
+    final totalXp = statsBox.get('totalXp', defaultValue: 0) as int;
+    return getRealmProgress(totalXp).level;
+  }
+
+  /// 距下一劫难的修为差（当前修为为准；无下一劫难为 0）。
+  int get tribulationDistance => distanceToNextTribulation(
+        currentCultivation: state.profile.currentCultivation,
+        tribulations: state.profile.tribulations,
+      );
+
+  /// 已度过劫难总次数（六/七/八/九转合计）。
+  int get tribulationsPassedTotal =>
+      totalPassedTribulations(state.profile.tribulations);
+
+  /// 当前转数「已到期且未渡过」的 stage（0/1/2）；无则 null。
+  int? get dueTribulationStageForCurrentRealm =>
+      dueTribulationStage(
+        realmLevel: currentRealmLevel,
+        currentCultivation: state.profile.currentCultivation,
+        tribulations: state.profile.tribulations,
+      );
+
+  /// 指定转数「已到期且未渡过」的 stage（供渡劫卡各转行展示）。
+  int? dueTribulationStageFor(int realmLevel) => dueTribulationStage(
+        realmLevel: realmLevel,
+        currentCultivation: state.profile.currentCultivation,
+        tribulations: state.profile.tribulations,
+      );
 
   /// 尝试渡劫（持久化渡劫状态）。
   ///

@@ -12,6 +12,14 @@ import 'package:sidequest/src/features/cultivation/logic/cultivation_provider.da
 import 'package:sidequest/src/features/cultivation/logic/faction_realm.dart';
 import 'package:sidequest/src/features/cultivation/logic/nine_turn_prerequisites.dart';
 import 'package:sidequest/src/features/cultivation/logic/refining_service.dart';
+import 'package:sidequest/src/features/cultivation/logic/achievement_provider.dart';
+import 'package:sidequest/src/features/cultivation/logic/achievement_service.dart';
+import 'package:sidequest/src/features/cultivation/logic/challenge_provider.dart';
+import 'package:sidequest/src/features/cultivation/logic/challenge_service.dart';
+import 'package:sidequest/src/features/cultivation/logic/study_review_provider.dart';
+import 'package:sidequest/src/features/cultivation/logic/study_review_service.dart';
+import 'package:sidequest/src/features/cultivation/logic/study_statistics_provider.dart';
+import 'package:sidequest/src/features/cultivation/logic/study_statistics_service.dart';
 import 'package:sidequest/src/features/cultivation/logic/tribulation_config.dart';
 import 'package:sidequest/src/features/cultivation/logic/tribulation_service.dart';
 import 'package:sidequest/src/features/quests/logic/quest_provider.dart';
@@ -30,6 +38,10 @@ class LegacyScreen extends ConsumerWidget {
     final cultivationState = ref.watch(cultivationProvider);
     // 只读 getter / action：ref.read(cultivationProvider.notifier)
     final cultivationNotifier = ref.read(cultivationProvider.notifier);
+    final studyStats = ref.watch(studyStatisticsProvider);
+    final studyReview = ref.watch(studyReviewProvider);
+    final achievements = ref.watch(achievementProvider);
+    final challenges = ref.watch(challengeProvider);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -52,6 +64,14 @@ class LegacyScreen extends ConsumerWidget {
           _buildMaterialInventory(context, ref, cultivationState.profile),
           const SizedBox(height: 20),
           _buildGuInsects(context, cultivationState.profile),
+          const SizedBox(height: 20),
+          _buildStudyGrowthCard(context, studyStats),
+          const SizedBox(height: 20),
+          _buildStudyReviewCard(context, studyReview),
+          const SizedBox(height: 20),
+          _buildAchievementCard(context, achievements),
+          const SizedBox(height: 20),
+          _buildChallengeCard(context, challenges),
           const SizedBox(height: 20),
           _buildWeeklyProgress(context, questState.weeklyHistory),
           const SizedBox(height: 24),
@@ -361,6 +381,11 @@ class LegacyScreen extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: 12),
+          _prereqRow(
+              '距下一劫难', '还差 ${cultivationNotifier.tribulationDistance} 修为'),
+          _prereqRow(
+              '已度过劫难', '${cultivationNotifier.tribulationsPassedTotal} 次'),
+          const SizedBox(height: 8),
           for (final realmLevel in const [6, 7, 8, 9])
             _buildTribulationRow(
                 context, profile, realmLevel, cultivationNotifier),
@@ -371,27 +396,45 @@ class LegacyScreen extends ConsumerWidget {
 
   Widget _buildTribulationRow(BuildContext context, PlayerProfile profile,
       int realmLevel, CultivationNotifier cultivationNotifier) {
-    // 当前状态 = 该转数 stageIndex 最高的记录（无记录 = 未开始/未完成）
-    TribulationRecord? record;
+    final isVenerable = realmLevel == 9;
+    // 到期劫难（当前修为达到该转里程碑且未渡过）；未到期/已完成 → 锁定
+    final due = cultivationNotifier.dueTribulationStageFor(realmLevel);
+
+    // 该转已渡过次数 = 最高 stage 记录（stageIndex 即已渡过数）
+    TribulationRecord? highest;
     for (final r in profile.tribulations) {
       if (r.realmLevel == realmLevel &&
-          (record == null || r.stageIndex > record.stageIndex)) {
-        record = r;
+          (highest == null || r.stageIndex > highest.stageIndex)) {
+        highest = r;
       }
     }
-    final stageIndex = record?.stageIndex;
-    final isVenerable = realmLevel == 9;
-    final isCompleted =
-        stageIndex != null && stageIndex >= kTribulationCompletedStageIndex;
-    final failCount = record?.failCount ?? 0;
+    final passed = highest?.stageIndex ?? 0;
+    final isCompleted = passed >= kTribulationCompletedStageIndex;
+
+    // 到期劫难的记录（失败次数 / 冷却 / 成功率）
+    final dueRecord = due == null
+        ? null
+        : profile.tribulations
+            .where((r) => r.realmLevel == realmLevel && r.stageIndex == due)
+            .firstOrNull;
+    final failCount = dueRecord?.failCount ?? 0;
     final onCooldown = isTribulationOnCooldown(
-      lastAttemptAt: record?.lastAttemptAt,
+      lastAttemptAt: dueRecord?.lastAttemptAt,
       now: DateTime.now(),
     );
     final rate = calculateTribulationSuccessRate(
       realmLevel: realmLevel,
       failCount: failCount,
     );
+
+    final String stageLabel;
+    if (due != null) {
+      stageLabel = isVenerable ? '劫难已至' : '劫难已至 · ${due + 1}/3';
+    } else if (isCompleted) {
+      stageLabel = '已完成';
+    } else {
+      stageLabel = '未到劫难';
+    }
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
@@ -406,32 +449,35 @@ class LegacyScreen extends ConsumerWidget {
                 style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
               ),
               Text(
-                _tribulationStageLabel(isVenerable, stageIndex),
+                stageLabel,
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
                   color: isCompleted
                       ? Colors.green
-                      : Theme.of(context).colorScheme.primary,
+                      : (due != null
+                          ? Colors.redAccent
+                          : Theme.of(context).colorScheme.primary),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 2),
-          Text(
-            '成功率：${(rate * 100).round()}%${failCount > 0 ? ' · 失败 $failCount 次' : ''}${onCooldown ? ' · 冷却中' : ''}',
-            style: const TextStyle(fontSize: 11, color: Colors.grey),
-          ),
+          if (due != null)
+            Text(
+              '成功率：${(rate * 100).round()}%${failCount > 0 ? ' · 失败 $failCount 次' : ''}${onCooldown ? ' · 冷却中' : ''}',
+              style: const TextStyle(fontSize: 11, color: Colors.grey),
+            ),
           const SizedBox(height: 6),
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: isCompleted
+              onPressed: due == null
                   ? null
                   : () {
                       final result = cultivationNotifier.attemptTribulation(
                         realmLevel: realmLevel,
-                        stageIndex: stageIndex ?? 0,
+                        stageIndex: due,
                       );
                       _showTribulationResult(context, result);
                     },
@@ -814,6 +860,163 @@ class LegacyScreen extends ConsumerWidget {
       showAppSnackBar(context, '炼蛊失败 · 材料已消耗');
     }
   }
+  Widget _buildStudyGrowthCard(BuildContext context, StudyStatistics stats) {
+    final totalLabel = stats.totalStudyMinutes >= 60
+        ? '${stats.totalStudyMinutes ~/ 60}小时${stats.totalStudyMinutes % 60 > 0 ? ' ${stats.totalStudyMinutes % 60}分' : ''}'
+        : '${stats.totalStudyMinutes} 分钟';
+    return GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.menu_book_rounded, size: 20),
+              SizedBox(width: 8),
+              Text(
+                '学习修炼',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _prereqRow('今日闭关', '${stats.todayStudyMinutes} 分钟'),
+          _prereqRow('本周闭关', '${stats.weeklyStudyMinutes} 分钟'),
+          _prereqRow('累计闭关', totalLabel),
+          _prereqRow('连续修炼', '${stats.studyStreak} 天'),
+          _prereqRow('完成次数', '${stats.totalSessionCount} 次'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStudyReviewCard(BuildContext context, StudyReview review) {
+    return GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.insights_rounded, size: 20),
+              SizedBox(width: 8),
+              Text(
+                '近期修炼回顾',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _prereqRow('本周闭关', '${review.weeklyMinutes} 分钟'),
+          _prereqRow('本月闭关', '${review.monthlyMinutes} 分钟'),
+          const SizedBox(height: 8),
+          const Text('最近7日趋势',
+              style: TextStyle(fontSize: 12, color: Colors.grey)),
+          for (final d in review.last7Days.reversed)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(DateFormat('MM-dd').format(d.date),
+                      style: const TextStyle(fontSize: 12)),
+                  Text('${d.minutes} 分钟',
+                      style: const TextStyle(fontSize: 12)),
+                ],
+              ),
+            ),
+          const SizedBox(height: 8),
+          const Text('学科分布',
+              style: TextStyle(fontSize: 12, color: Colors.grey)),
+          for (final e in review.subjectMinutes.entries)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(e.key, style: const TextStyle(fontSize: 12)),
+                  Text('${e.value} 分钟',
+                      style: const TextStyle(fontSize: 12)),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAchievementCard(BuildContext context, List<Achievement> list) {
+    final unlocked = list.where((a) => a.isUnlocked).length;
+    return GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.emoji_events_rounded, size: 20),
+              SizedBox(width: 8),
+              Text(
+                '修炼成就',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _prereqRow('已解锁', '$unlocked/${list.length}'),
+          for (final a in list)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Row(
+                children: [
+                  Icon(
+                    a.isUnlocked
+                        ? Icons.check_circle_rounded
+                        : Icons.lock_rounded,
+                    size: 16,
+                    color: a.isUnlocked ? Colors.green : Colors.grey,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      '${a.title}：${a.description}',
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChallengeCard(BuildContext context, ChallengeSummary summary) {
+    final longest =
+        summary.records.firstWhere((r) => r.title == '最长连续');
+    final daily = summary.records.firstWhere((r) => r.title == '单日最高');
+    final weekly = summary.records.firstWhere((r) => r.title == '单周最高');
+    return GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.local_fire_department_rounded, size: 20),
+              SizedBox(width: 8),
+              Text(
+                '我的纪录',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _prereqRow('最长连续', '${longest.best} 天'),
+          _prereqRow('单日最高', '${daily.best} 分钟'),
+          _prereqRow('单周最高', '${weekly.best ~/ 60} 小时'),
+          _prereqRow('累计', '${summary.totalMinutes ~/ 60} 小时'),
+        ],
+      ),
+    );
+  }
+
   Widget _buildWeeklyProgress(BuildContext context, Map<DateTime, String> history) {
     final now = DateTime.now();
     // Start from Monday of the current week

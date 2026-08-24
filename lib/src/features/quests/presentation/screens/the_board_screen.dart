@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import '../../logic/quest_provider.dart';
 import '../../data/quest_model.dart';
+import 'package:sidequest/src/features/cultivation/presentation/screens/seclusion_screen.dart';
 import 'package:sidequest/src/shared/widgets/app_snackbar.dart';
 import 'package:sidequest/src/shared/widgets/glass_card.dart';
 import 'create_quest_screen.dart';
@@ -34,6 +35,12 @@ class TheBoardScreen extends ConsumerWidget {
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const CreateQuestScreen()),
+                );
+              },
+              onSeclusionTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const SeclusionScreen()),
                 );
               },
             );
@@ -70,11 +77,13 @@ class _BoardHeader extends StatelessWidget {
   final bool canShuffle;
   final VoidCallback onShuffle;
   final VoidCallback onCreateTap;
+  final VoidCallback onSeclusionTap;
 
   const _BoardHeader({
     required this.canShuffle,
     required this.onShuffle,
     required this.onCreateTap,
+    required this.onSeclusionTap,
   });
 
   @override
@@ -89,6 +98,19 @@ class _BoardHeader extends StatelessWidget {
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            TextButton.icon(
+              onPressed: onSeclusionTap,
+              icon: const Icon(Icons.timer_rounded, size: 18),
+              label: const Text(
+                "开始闭关",
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              style: TextButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.surface.withValues(alpha: 0.5),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              ),
+            ),
+            const SizedBox(width: 8),
             TextButton.icon(
               onPressed: onCreateTap,
               icon: const Icon(Icons.add_circle_outline_rounded, size: 18),

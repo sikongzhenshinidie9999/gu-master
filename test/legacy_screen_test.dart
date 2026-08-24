@@ -8,11 +8,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:hive/hive.dart';
 
+import 'package:sidequest/src/features/cultivation/data/cultivation_session.dart';
 import 'package:sidequest/src/features/cultivation/data/dao.dart';
 import 'package:sidequest/src/features/cultivation/data/dao_zhu.dart';
 import 'package:sidequest/src/features/cultivation/data/gu_insect.dart';
 import 'package:sidequest/src/features/cultivation/data/gu_material.dart';
 import 'package:sidequest/src/features/cultivation/data/player_profile.dart';
+import 'package:sidequest/src/features/cultivation/data/session_box_provider.dart';
 import 'package:sidequest/src/features/cultivation/data/tribulation_record.dart';
 import 'package:sidequest/src/features/cultivation/logic/cultivation_provider.dart';
 import 'package:sidequest/src/features/cultivation/logic/faction_realm_config.dart';
@@ -54,6 +56,7 @@ void main() {
 
   late Directory tempDir;
   late Box<PlayerProfile> cultivationBox;
+  late Box<CultivationSession> sessionBox;
   late Box<QuestModel> questBox;
   late ProviderContainer container;
 
@@ -85,12 +88,16 @@ void main() {
       );
       debugPrint('ENV: boxes open');
       questBox = await Hive.openBox<QuestModel>('quests', bytes: Uint8List(0));
+      sessionBox = await Hive.openBox<CultivationSession>(
+          'sessions',
+          bytes: Uint8List(0));
       await Hive.openBox('stats', bytes: Uint8List(0));
       await Hive.openBox('settings', bytes: Uint8List(0));
     });
     container = ProviderContainer(overrides: [
       questBoxProvider.overrideWithValue(questBox),
       cultivationBoxProvider.overrideWithValue(cultivationBox),
+      sessionBoxProvider.overrideWithValue(sessionBox),
     ]);
   }
 
@@ -382,9 +389,10 @@ void main() {
     expect(find.text('主修流派：智道流派'), findsOneWidget);
   });
 
-  testWidgets('渡劫 stage 展示：1/3、2/3、3/3、九转已完成', (tester) async {
+  testWidgets('渡劫卡：到期/未到/已完成 展示与距离/渡过次数', (tester) async {
     await initEnv(tester);
     final profile = PlayerProfile(
+      currentCultivation: 11333, // 越过六/七/八转全部里程碑
       tribulations: [
         TribulationRecord(realmLevel: 6, stageIndex: 0),
         TribulationRecord(realmLevel: 7, stageIndex: 1),
@@ -396,24 +404,28 @@ void main() {
     await tester.runAsync(() => cultivationBox.add(profile));
     await pumpLegacy(tester);
     expect(find.text('六转'), findsOneWidget);
-    expect(find.text('1/3'), findsOneWidget);
-    expect(find.text('2/3'), findsOneWidget);
-    expect(find.text('3/3'), findsOneWidget);
+    expect(find.text('劫难已至 · 1/3'), findsOneWidget);
+    expect(find.text('劫难已至 · 2/3'), findsOneWidget);
+    expect(find.text('劫难已至 · 3/3'), findsOneWidget);
     expect(find.text('九转尊者劫'), findsOneWidget);
     expect(find.text('已完成'), findsOneWidget);
+    expect(find.text('已度过劫难：6 次'), findsOneWidget);
   });
 
-  testWidgets('渡劫未开始/未完成展示', (tester) async {
+  testWidgets('渡劫未到/已完成展示（当前修为低）', (tester) async {
     await initEnv(tester);
-    await tester.runAsync(() => cultivationBox.add(PlayerProfile()));
+    final profile = PlayerProfile(currentCultivation: 0);
+    await tester.runAsync(() => cultivationBox.add(profile));
     await pumpLegacy(tester);
-    expect(find.text('未开始'), findsNWidgets(3)); // 六/七/八转
-    expect(find.text('未完成'), findsOneWidget); // 九转尊者劫
+    expect(find.text('未到劫难'), findsNWidgets(4)); // 六/七/八/九转
+    expect(find.text('距下一劫难：还差 2833 修为'), findsOneWidget);
+    expect(find.text('已度过劫难：0 次'), findsOneWidget);
   });
 
   testWidgets('冷却状态与失败次数展示', (tester) async {
     await initEnv(tester);
     final profile = PlayerProfile(
+      currentCultivation: 3000, // 达六转 1/3 里程碑 → 劫难已至
       tribulations: [
         TribulationRecord(
           realmLevel: 6,
@@ -425,13 +437,15 @@ void main() {
     );
     await tester.runAsync(() => cultivationBox.add(profile));
     await pumpLegacy(tester);
+    expect(find.text('劫难已至 · 1/3'), findsOneWidget);
     expect(find.textContaining('失败 1 次'), findsOneWidget);
     expect(find.textContaining('冷却中'), findsWidgets);
   });
 
   testWidgets('渡劫按钮产生成功/失败反馈', (tester) async {
     await initEnv(tester);
-    await tester.runAsync(() => cultivationBox.add(PlayerProfile()));
+    final profile = PlayerProfile(currentCultivation: 3000); // 六转到期
+    await tester.runAsync(() => cultivationBox.add(profile));
     await pumpLegacy(tester);
     await tester.ensureVisible(find.widgetWithText(ElevatedButton, '渡劫').first);
     await tester.pump();
@@ -450,6 +464,7 @@ void main() {
   testWidgets('冷却中点击渡劫 → 渡劫冷却中', (tester) async {
     await initEnv(tester);
     final profile = PlayerProfile(
+      currentCultivation: 3000, // 六转到期
       tribulations: [
         TribulationRecord(
           realmLevel: 6,
@@ -804,5 +819,41 @@ void main() {
     expect(find.text('道痕：✓'), findsOneWidget);
     expect(find.text('流派境界：✗'), findsOneWidget);
     expect(find.text('总体资格：✗'), findsOneWidget);
+  });
+
+  testWidgets('显示学习成长卡（今日/累计/连续）', (tester) async {
+    await initEnv(tester);
+    // 种子：今日 45 分钟完成 + 连续 3 天
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day, 8);
+    final session = CultivationSession(
+      id: 's1',
+      startTime: today,
+      endTime: today.add(const Duration(minutes: 45)),
+      plannedDurationMinutes: 45,
+      actualDurationMinutes: 45,
+      subject: '英语',
+      category: CultivationSessionCategory.shen.index,
+      status: CultivationSessionStatus.completed.index,
+      xpEarned: 90,
+      daoTraceKind: 2,
+      daoTraceAmount: 45,
+      realmExpEarned: 45,
+    );
+    await tester.runAsync(() => sessionBox.add(session));
+    await tester.runAsync(() => Hive.box('stats').put('studyStreak', 3));
+
+    await pumpLegacy(tester);
+    expect(find.text('学习修炼'), findsOneWidget);
+    expect(find.text('今日闭关：45 分钟'), findsOneWidget);
+    // 「本周闭关」在学习修炼卡与近期修炼回顾卡各出现一次
+    expect(find.text('本周闭关：45 分钟'), findsNWidgets(2));
+    expect(find.text('累计闭关：45 分钟'), findsOneWidget);
+    expect(find.text('连续修炼：3 天'), findsOneWidget);
+    expect(find.text('完成次数：1 次'), findsOneWidget);
+    // B-4/5/6 新增卡片存在
+    expect(find.text('近期修炼回顾'), findsOneWidget);
+    expect(find.text('修炼成就'), findsOneWidget);
+    expect(find.text('我的纪录'), findsOneWidget);
   });
 }

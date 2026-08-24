@@ -3,8 +3,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'src/features/cultivation/data/cultivation_session.dart';
 import 'src/features/cultivation/data/dao_zhu.dart';
 import 'src/features/cultivation/data/gu_insect.dart';
+import 'src/features/cultivation/data/session_box_provider.dart';
 import 'src/features/cultivation/data/gu_material.dart';
 import 'src/features/cultivation/data/player_profile.dart';
 import 'src/features/cultivation/data/tribulation_record.dart';
@@ -37,12 +39,16 @@ void main() async {
   if (!Hive.isAdapterRegistered(5)) {
     Hive.registerAdapter(DaoZhuStateAdapter());
   }
+  if (!Hive.isAdapterRegistered(6)) {
+    Hive.registerAdapter(CultivationSessionAdapter());
+  }
   
   // Open Boxes
   final questBox = await Hive.openBox<QuestModel>('quests');
   await Hive.openBox('stats');
   await Hive.openBox('settings');
   final cultivationBox = await Hive.openBox<PlayerProfile>('cultivation');
+  final sessionBox = await Hive.openBox<CultivationSession>('sessions');
 
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
@@ -53,6 +59,7 @@ void main() async {
       overrides: [
         questBoxProvider.overrideWithValue(questBox),
         cultivationBoxProvider.overrideWithValue(cultivationBox),
+        sessionBoxProvider.overrideWithValue(sessionBox),
       ],
       child: const SidequestApp(),
     ),
