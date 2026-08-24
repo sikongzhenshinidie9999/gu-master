@@ -64,4 +64,48 @@ void main() {
       expect(wudao, greaterThan(base));
     });
   });
+
+  group('流派感悟奖励（与道痕独立）', () {
+    test('炼体任务 → 同时获得道痕与流派感悟（同属力道）', () {
+      final r = computeCultivationReward(_quest('炼体'));
+      expect(r.daoKind, DaoKind.li);
+      expect(r.daoTraceAmount, greaterThan(0));
+      expect(r.realmExpGain, greaterThan(0));
+      expect(r.hasRealmExp, isTrue);
+    });
+
+    test('炼神任务 → 获得智道道痕 + 智道感悟', () {
+      final r = computeCultivationReward(_quest('炼神'));
+      expect(r.daoKind, DaoKind.zhi);
+      expect(r.realmExpGain, greaterThan(0));
+    });
+
+    test('炼蛊任务 → 获得炼道道痕 + 炼道感悟', () {
+      final r = computeCultivationReward(_quest('炼蛊'));
+      expect(r.daoKind, DaoKind.lian);
+      expect(r.realmExpGain, greaterThan(0));
+    });
+
+    test('杂务 / 炼气 → 无道痕、无感悟', () {
+      expect(computeCultivationReward(_quest('杂务')).realmExpGain, 0);
+      expect(computeCultivationReward(_quest('杂务')).hasRealmExp, isFalse);
+      expect(computeCultivationReward(_quest('炼气')).realmExpGain, 0);
+    });
+
+    test('悟道 → 道痕与感悟均高于普通分类', () {
+      final baseDao = computeCultivationReward(_quest('炼体')).daoTraceAmount;
+      final baseExp = computeCultivationReward(_quest('炼体')).realmExpGain;
+      final wudao = computeCultivationReward(_quest('悟道'), random: Random(1));
+      expect(wudao.daoTraceAmount, greaterThan(baseDao));
+      expect(wudao.realmExpGain, greaterThan(baseExp));
+    });
+
+    test('悟道 → 道痕与感悟的随机流派保持一致', () {
+      final r = computeCultivationReward(_quest('悟道'), random: Random(7));
+      expect(r.daoKind, anyOf(DaoKind.li, DaoKind.zhi, DaoKind.lian));
+      // 感悟与道痕同属该随机流派（同一 daoKind 承载两笔独立数值）
+      expect(r.hasDaoTrace, isTrue);
+      expect(r.hasRealmExp, isTrue);
+    });
+  });
 }

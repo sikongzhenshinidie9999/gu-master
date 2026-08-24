@@ -38,7 +38,7 @@ class PlayerProfile extends HiveObject {
   @HiveField(2)
   Map<int, int> daoTraces;
 
-  /// 流派境界：Faction.index -> FactionLevel.index。
+  /// 流派境界（废弃为业务数据源，仅用于 Hive 兼容；不读取、不写入、不参与境界计算）。
   @HiveField(3)
   Map<int, int> factionLevels;
 
@@ -62,6 +62,13 @@ class PlayerProfile extends HiveObject {
   @HiveField(8)
   DaoZhuState? daoZhu;
 
+  /// 流派大道感悟（唯一境界成长源）：Faction.index -> 感悟值。
+  ///
+  /// 与 daoTraces 完全独立：道痕是力量、感悟是境界经验，二者不可互相转换；
+  /// FactionLevel 仅由本字段派生；道主除外（见 DaoZhuState）。
+  @HiveField(9)
+  Map<int, int> factionRealmExp;
+
   PlayerProfile({
     this.totalXp = 0,
     this.currentCultivation = 0,
@@ -71,9 +78,11 @@ class PlayerProfile extends HiveObject {
     List<GuMaterial>? guMaterials,
     List<GuInsect>? guInsects,
     this.xianYuan = 0,
+    Map<int, int>? factionRealmExp,
     this.daoZhu,
   })  : daoTraces = daoTraces ?? {},
         factionLevels = factionLevels ?? {},
+        factionRealmExp = factionRealmExp ?? {},
         tribulations = tribulations ?? [],
         guMaterials = guMaterials ?? [],
         guInsects = guInsects ?? [];

@@ -49,16 +49,23 @@ class CultivationNotifier extends StateNotifier<CultivationState> {
     state = CultivationState(profile: profile);
   }
 
-  /// 完成任务后的道痕奖励（由 QuestNotifier 回调触发，每次完成只执行一次）。
+  /// 完成任务后的修炼奖励（由 QuestNotifier 回调触发，每次完成只执行一次）。
   ///
-  /// - 只增加 daoTraces，不影响 totalXp；
-  /// - 无流派道痕的分类（杂务 / 炼气等）直接跳过。
+  /// - 道痕（力量）与流派感悟（境界成长）分别写入两个独立数据源，互不换算；
+  /// - 不影响 totalXp；无奖励的分类（杂务 / 炼气等）直接跳过。
   void applyQuestCompletedRewards(QuestModel quest) {
     final reward = computeCultivationReward(quest);
-    if (!reward.hasDaoTrace) return;
+    if (!reward.hasDaoTrace && !reward.hasRealmExp) return;
     final profile = state.profile;
-    profile.daoTraces[reward.daoKind!.index] =
-        (profile.daoTraces[reward.daoKind!.index] ?? 0) + reward.daoTraceAmount;
+    final kind = reward.daoKind!;
+    if (reward.hasDaoTrace) {
+      profile.daoTraces[kind.index] =
+          (profile.daoTraces[kind.index] ?? 0) + reward.daoTraceAmount;
+    }
+    if (reward.hasRealmExp) {
+      profile.factionRealmExp[kind.index] =
+          (profile.factionRealmExp[kind.index] ?? 0) + reward.realmExpGain;
+    }
     saveProfile(profile);
   }
 

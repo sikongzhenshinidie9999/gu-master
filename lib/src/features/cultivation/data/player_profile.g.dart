@@ -25,6 +25,7 @@ class PlayerProfileAdapter extends TypeAdapter<PlayerProfile> {
       guMaterials: (fields[5] as List?)?.cast<GuMaterial>(),
       guInsects: (fields[6] as List?)?.cast<GuInsect>(),
       xianYuan: fields[7] as int,
+      factionRealmExp: (fields[9] as Map?)?.cast<int, int>(),
       daoZhu: fields[8] as DaoZhuState?,
     );
   }
@@ -32,7 +33,7 @@ class PlayerProfileAdapter extends TypeAdapter<PlayerProfile> {
   @override
   void write(BinaryWriter writer, PlayerProfile obj) {
     writer
-      ..writeByte(9)
+      ..writeByte(10)
       ..writeByte(0)
       ..write(obj.totalXp)
       ..writeByte(1)
@@ -50,7 +51,9 @@ class PlayerProfileAdapter extends TypeAdapter<PlayerProfile> {
       ..writeByte(7)
       ..write(obj.xianYuan)
       ..writeByte(8)
-      ..write(obj.daoZhu);
+      ..write(obj.daoZhu)
+      ..writeByte(9)
+      ..write(obj.factionRealmExp);
   }
 
   @override

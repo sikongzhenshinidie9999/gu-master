@@ -195,8 +195,8 @@ class LegacyScreen extends ConsumerWidget {
 
   Widget _buildFactionRealmRow(
       BuildContext context, PlayerProfile profile, Faction faction) {
-    final dao = profile.daoTraces[faction.daoKind.index] ?? 0;
-    final realm = getFactionRealmProgress(faction, dao);
+    final realmExp = profile.factionRealmExp[faction.daoKind.index] ?? 0;
+    final realm = getFactionRealmProgress(faction, realmExp);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Column(
@@ -234,8 +234,8 @@ class LegacyScreen extends ConsumerWidget {
           const SizedBox(height: 4),
           Text(
             realm.isCapped
-                ? '境界已达无上大宗师，道痕仍可继续积累（道痕 ${NumberFormat.decimalPattern().format(dao)}）'
-                : '道痕 ${NumberFormat.decimalPattern().format(dao)} / ${NumberFormat.decimalPattern().format(realm.nextThreshold!)}',
+                ? '境界已达无上大宗师，感悟仍可继续积累（感悟 ${NumberFormat.decimalPattern().format(realmExp)}）'
+                : '感悟 ${NumberFormat.decimalPattern().format(realmExp)} / ${NumberFormat.decimalPattern().format(realm.nextThreshold!)}',
             style: TextStyle(
               fontSize: 11,
               color: Theme.of(context).textTheme.bodySmall?.color?.withValues(alpha: 0.7),

@@ -7,9 +7,12 @@ import 'package:sidequest/src/features/cultivation/data/dao.dart';
 import 'package:sidequest/src/features/cultivation/data/dao_zhu.dart';
 import 'package:sidequest/src/features/cultivation/data/gu_insect.dart';
 import 'package:sidequest/src/features/cultivation/data/gu_material.dart';
+import 'package:sidequest/src/features/cultivation/data/faction_level.dart';
 import 'package:sidequest/src/features/cultivation/data/player_profile.dart';
 import 'package:sidequest/src/features/cultivation/data/tribulation_record.dart';
 import 'package:sidequest/src/features/cultivation/logic/cultivation_provider.dart';
+import 'package:sidequest/src/features/cultivation/logic/faction_realm.dart';
+import 'package:sidequest/src/features/cultivation/logic/reward_config.dart';
 import 'package:sidequest/src/features/quests/logic/quest_provider.dart';
 import 'package:sidequest/src/features/quests/data/quest_model.dart';
 
@@ -141,11 +144,16 @@ void main() {
 
       final xpBefore = quests.state.totalXp;
       final daoBefore = cult.state.profile.daoTraces[DaoKind.li.index] ?? 0;
+      final expBefore =
+          cult.state.profile.factionRealmExp[Faction.li.daoKind.index] ?? 0;
 
       quests.completeQuest(q);
 
       expect(quests.state.totalXp, xpBefore + 10); // tier1 → 10 修为，与以前一致
+      // 道痕与感悟分别写入两个独立 Map，各自累加
       expect(cult.state.profile.daoTraces[DaoKind.li.index], daoBefore + 5);
+      expect(cult.state.profile.factionRealmExp[Faction.li.daoKind.index],
+          expBefore + kBasicRealmExpReward);
     });
 
     test('同一个任务不能重复领取道痕奖励', () {
@@ -180,6 +188,51 @@ void main() {
       quests.acceptQuest(q);
       quests.completeQuest(q);
       expect(cult.state.profile.daoTraces[DaoKind.lian.index], 66 + 5);
+    });
+
+    test('完成任务 → 道痕与感悟独立累加，互不换算', () {
+      final cult = CultivationNotifier(cultivationBox, statsBox);
+      final quests = newWiredQuestNotifier(cult);
+      quests.createCustomQuest(
+          title: '炼蛊', description: '炼蛊', category: '炼蛊', tier: 1);
+      final q = quests.state.availableQuests.last;
+      quests.acceptQuest(q);
+      quests.completeQuest(q);
+
+      final dao = cult.state.profile.daoTraces[DaoKind.lian.index] ?? 0;
+      final exp =
+          cult.state.profile.factionRealmExp[Faction.lian.daoKind.index] ?? 0;
+      expect(dao, greaterThan(0));
+      expect(exp, greaterThan(0));
+
+      // 只增加感悟 → 境界由感悟推进，道痕不受影响
+      expect(getFactionRealmProgress(Faction.lian, exp + 99999).level,
+          FactionLevel.supremeGrandmaster);
+      expect(cult.state.profile.daoTraces[DaoKind.lian.index], dao);
+
+      // 道痕再多也不影响境界：境界只看 factionRealmExp
+      expect(getFactionRealmProgress(Faction.lian, exp).level,
+          FactionLevel.ordinary);
+      expect(getFactionRealmProgress(Faction.lian, dao).level,
+          FactionLevel.ordinary);
+    });
+
+    test('旧 PlayerProfile 无 factionRealmExp 时兼容（感悟空、道痕保留）', () async {
+      // 模拟旧版档案：未设置 factionRealmExp（默认空），只带道痕
+      final legacy = PlayerProfile(totalXp: 1000, currentCultivation: 900);
+      legacy.daoTraces[DaoKind.zhi.index] = 777;
+      await cultivationBox.add(legacy);
+
+      final notifier = CultivationNotifier(cultivationBox, statsBox);
+      final profile = notifier.state.profile;
+      // 道痕完整保留
+      expect(profile.daoTraces[DaoKind.zhi.index], 777);
+      // 感悟为空（默认 {}），不会由道痕转换而来
+      expect(profile.factionRealmExp, isEmpty);
+      // 境界回到普通（预期行为）
+      final realm = getFactionRealmProgress(
+          Faction.zhi, profile.factionRealmExp[Faction.zhi.daoKind.index] ?? 0);
+      expect(realm.level, FactionLevel.ordinary);
     });
   });
 }
