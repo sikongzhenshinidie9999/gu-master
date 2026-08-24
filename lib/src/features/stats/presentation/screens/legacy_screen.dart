@@ -7,9 +7,12 @@ import 'package:sidequest/src/features/cultivation/data/gu_insect_definition.dar
 import 'package:sidequest/src/features/cultivation/data/gu_material_definition.dart';
 import 'package:sidequest/src/features/cultivation/data/gu_recipe.dart';
 import 'package:sidequest/src/features/cultivation/data/player_profile.dart';
+import 'package:sidequest/src/features/cultivation/data/tribulation_record.dart';
 import 'package:sidequest/src/features/cultivation/logic/cultivation_provider.dart';
 import 'package:sidequest/src/features/cultivation/logic/faction_realm.dart';
 import 'package:sidequest/src/features/cultivation/logic/refining_service.dart';
+import 'package:sidequest/src/features/cultivation/logic/tribulation_config.dart';
+import 'package:sidequest/src/features/cultivation/logic/tribulation_service.dart';
 import 'package:sidequest/src/features/quests/logic/quest_provider.dart';
 import 'package:sidequest/src/features/stats/logic/realm.dart';
 import 'package:sidequest/src/shared/widgets/app_snackbar.dart';
@@ -22,7 +25,10 @@ class LegacyScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final questState = ref.watch(questProvider);
+    // 状态监听：ref.watch(cultivationProvider)（正确监听 Provider state 变化）
     final cultivationState = ref.watch(cultivationProvider);
+    // 只读 getter / action：ref.read(cultivationProvider.notifier)
+    final cultivationNotifier = ref.read(cultivationProvider.notifier);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -34,6 +40,11 @@ class LegacyScreen extends ConsumerWidget {
           _buildDaoTraces(context, cultivationState.profile),
           const SizedBox(height: 20),
           _buildFactionRealms(context, cultivationState.profile),
+          const SizedBox(height: 20),
+          _buildNineTurnCard(context, cultivationState.profile, cultivationNotifier),
+          const SizedBox(height: 20),
+          _buildTribulationCard(
+              context, cultivationState.profile, cultivationNotifier),
           const SizedBox(height: 20),
           _buildMaterialInventory(context, ref, cultivationState.profile),
           const SizedBox(height: 20),
@@ -59,6 +70,27 @@ class LegacyScreen extends ConsumerWidget {
       BuildContext context, int totalXp, PlayerProfile profile) {
     final realm = getRealmProgress(totalXp);
     final needNext = realm.isMaxRealm ? 0 : (realm.nextThreshold! - totalXp);
+
+    // 名义转数（realm.dart）与真实九转突破（nineTurnReached）严格区分：
+    // - 名义已达九转但未真正突破 → 显示「八转巅峰 · 待突破」；
+    // - 已真正突破 → 显示「九转蛊尊」+ 突破时间。
+    final String heroRealmName;
+    final String heroRealmSubtitle;
+    if (profile.nineTurnReached) {
+      heroRealmName = '九转蛊尊';
+      final at = profile.nineTurnBreakthroughAt;
+      heroRealmSubtitle = at == null
+          ? '已突破九转'
+          : '九转突破于 ${DateFormat('yyyy-MM-dd HH:mm').format(at)}';
+    } else if (realm.level == 9) {
+      heroRealmName = '八转巅峰 · 待突破';
+      heroRealmSubtitle = '已达名义九转门槛，尚未完成真正突破';
+    } else {
+      heroRealmName = realm.name;
+      heroRealmSubtitle = realm.isMaxRealm
+          ? '已达最高境界'
+          : '距离 ${realm.nextName} 还需 $needNext 修为';
+    }
 
     return GlassCard(
       padding: const EdgeInsets.all(24),
@@ -96,7 +128,7 @@ class LegacyScreen extends ConsumerWidget {
                 const Icon(Icons.star_rounded, size: 16, color: Colors.amber),
                 const SizedBox(width: 6),
                 Text(
-                  realm.name,
+                  heroRealmName,
                   style: const TextStyle(
                     fontSize: 11, 
                     color: Colors.amber, 
@@ -119,9 +151,7 @@ class LegacyScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            realm.isMaxRealm
-                ? "已达最高境界"
-                : "距离 ${realm.nextName} 还需 $needNext 修为",
+            heroRealmSubtitle,
             style: TextStyle(
               fontSize: 12,
               color: Theme.of(context).textTheme.bodySmall?.color?.withValues(alpha: 0.7),
@@ -255,6 +285,201 @@ class LegacyScreen extends ConsumerWidget {
       ),
     );
   }
+
+  Widget _buildNineTurnCard(BuildContext context, PlayerProfile profile,
+      CultivationNotifier cultivationNotifier) {
+    // 只消费 Provider 只读 getter（6A/6B），不在 UI 重算任何业务条件。
+    final prereq = cultivationNotifier.nineTurnPrerequisites;
+    final primary = prereq.primaryFaction;
+    return GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.military_tech_rounded, size: 20),
+              SizedBox(width: 8),
+              Text(
+                '九转',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _prereqRow('主修流派', primary?.label ?? '未指定'),
+          _prereqRow(
+            '道痕',
+            '${prereq.currentDaoTraces} / ${prereq.daoTraceRequirement ?? 0}${prereq.daoTracesSatisfied ? ' ✓' : ' ✗'}',
+          ),
+          _prereqRow(
+            '流派境界',
+            '${prereq.factionRealmLevel?.label ?? '未知'}${prereq.factionRealmSatisfied ? ' ✓' : ' ✗'}',
+          ),
+          _prereqRow('白荔仙元', prereq.xianYuanSatisfied ? '已具备' : '未具备'),
+          _prereqRow('尊者劫', prereq.tribulationSatisfied ? '已完成' : '未完成'),
+          _prereqRow('总体', prereq.canBreakthrough ? '条件已满足，可突破' : '条件未满足'),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              // 仅「已突破」禁用；条件不足时点击由 Provider 返回失败原因
+              onPressed: profile.nineTurnReached
+                  ? null
+                  : () {
+                      final result = cultivationNotifier
+                          .attemptNineTurnBreakthrough(
+                        tribulationSatisfied:
+                            cultivationNotifier.nineTurnTribulationSatisfied,
+                      );
+                      _showNineTurnResult(context, result);
+                    },
+              child: const Text('尝试突破'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTribulationCard(BuildContext context, PlayerProfile profile,
+      CultivationNotifier cultivationNotifier) {
+    return GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.bolt_rounded, size: 20),
+              SizedBox(width: 8),
+              Text(
+                '渡劫',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          for (final realmLevel in const [6, 7, 8, 9])
+            _buildTribulationRow(
+                context, profile, realmLevel, cultivationNotifier),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTribulationRow(BuildContext context, PlayerProfile profile,
+      int realmLevel, CultivationNotifier cultivationNotifier) {
+    // 当前状态 = 该转数 stageIndex 最高的记录（无记录 = 未开始/未完成）
+    TribulationRecord? record;
+    for (final r in profile.tribulations) {
+      if (r.realmLevel == realmLevel &&
+          (record == null || r.stageIndex > record.stageIndex)) {
+        record = r;
+      }
+    }
+    final stageIndex = record?.stageIndex;
+    final isVenerable = realmLevel == 9;
+    final isCompleted =
+        stageIndex != null && stageIndex >= kTribulationCompletedStageIndex;
+    final failCount = record?.failCount ?? 0;
+    final onCooldown = isTribulationOnCooldown(
+      lastAttemptAt: record?.lastAttemptAt,
+      now: DateTime.now(),
+    );
+    final rate = calculateTribulationSuccessRate(
+      realmLevel: realmLevel,
+      failCount: failCount,
+    );
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                isVenerable ? '九转尊者劫' : '${_realmNumberLabel(realmLevel)}转',
+                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+              ),
+              Text(
+                _tribulationStageLabel(isVenerable, stageIndex),
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: isCompleted
+                      ? Colors.green
+                      : Theme.of(context).colorScheme.primary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 2),
+          Text(
+            '成功率：${(rate * 100).round()}%${failCount > 0 ? ' · 失败 $failCount 次' : ''}${onCooldown ? ' · 冷却中' : ''}',
+            style: const TextStyle(fontSize: 11, color: Colors.grey),
+          ),
+          const SizedBox(height: 6),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: isCompleted
+                  ? null
+                  : () {
+                      final result = cultivationNotifier.attemptTribulation(
+                        realmLevel: realmLevel,
+                        stageIndex: stageIndex ?? 0,
+                      );
+                      _showTribulationResult(context, result);
+                    },
+              child: const Text('渡劫'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showTribulationResult(
+      BuildContext context, TribulationResult result) {
+    switch (result.outcome) {
+      case TribulationOutcome.success:
+        showAppSnackBar(
+          context,
+          '渡劫成功 · 成功率 ${(result.successRate * 100).round()}% · 进入 ${_tribulationStageLabel(result.realmLevel == 9, result.nextStageIndex)}',
+        );
+        break;
+      case TribulationOutcome.failure:
+        showAppSnackBar(
+          context,
+          '渡劫失败 · 成功率 ${(result.successRate * 100).round()}% · 修为 -${result.cultivationPenalty}',
+        );
+        break;
+      case TribulationOutcome.onCooldown:
+        showAppSnackBar(context, '渡劫冷却中');
+        break;
+      case TribulationOutcome.invalid:
+        showAppSnackBar(context, '当前无法渡劫');
+        break;
+    }
+  }
+
+  void _showNineTurnResult(
+      BuildContext context, NineTurnBreakthroughResult result) {
+    switch (result.status) {
+      case NineTurnBreakthroughStatus.succeeded:
+        showAppSnackBar(context, '九转突破成功 · 白荔仙元已质变为黄杏仙元');
+        break;
+      case NineTurnBreakthroughStatus.alreadyReached:
+        showAppSnackBar(context, '已突破九转');
+        break;
+      case NineTurnBreakthroughStatus.failed:
+        showAppSnackBar(
+            context, '九转突破失败：${result.failureReason ?? '前置条件未满足'}');
+        break;
+    }
+  }
+
   Widget _buildMaterialInventory(
       BuildContext context, WidgetRef ref, PlayerProfile profile) {
     final owned = profile.guMaterials.where((m) => m.quantity > 0).toList();
@@ -725,4 +950,37 @@ GuInsectDefinition? _findInsectDefinition(String definitionId) {
     if (d.definitionId == definitionId) return d;
   }
   return null;
+}
+
+/// 九转卡行（纯展示，不参与业务计算）。
+Widget _prereqRow(String label, String value) {
+  return Padding(
+    padding: const EdgeInsets.symmetric(vertical: 3),
+    child: Text(
+      '$label：$value',
+      style: const TextStyle(fontSize: 13),
+    ),
+  );
+}
+
+/// 渡劫小阶标签：0→1/3、1→2/3、2→3/3、3→已完成；尊者劫 0→未完成。
+String _tribulationStageLabel(bool isVenerable, int? stageIndex) {
+  if (stageIndex == null) return isVenerable ? '未完成' : '未开始';
+  if (stageIndex >= kTribulationCompletedStageIndex) return '已完成';
+  if (isVenerable) return '未完成';
+  return '${stageIndex + 1}/3';
+}
+
+/// 转数中文标签（仅 6/7/8 需要）。
+String _realmNumberLabel(int realmLevel) {
+  switch (realmLevel) {
+    case 6:
+      return '六';
+    case 7:
+      return '七';
+    case 8:
+      return '八';
+    default:
+      return '$realmLevel';
+  }
 }

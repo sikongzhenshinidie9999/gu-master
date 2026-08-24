@@ -262,6 +262,23 @@ class CultivationNotifier extends StateNotifier<CultivationState> {
     );
   }
 
+  /// 尊者级渡劫是否已完成（只读派生，不写 Hive、不改状态）。
+  ///
+  /// PlayerProfile.tribulations 中存在 realmLevel == 9 且
+  /// stageIndex >= kTribulationCompletedStageIndex 的记录时为 true。
+  bool get nineTurnTribulationSatisfied => state.profile.tribulations.any(
+      (r) => r.realmLevel == 9 && r.stageIndex >= kTribulationCompletedStageIndex);
+
+  /// 九转前置条件（只读派生，不写 Hive、不改状态）。
+  ///
+  /// 复用 6A 纯逻辑 checkNineTurnPrerequisites，不在此重新实现四条件；
+  /// tribulationSatisfied 由 nineTurnTribulationSatisfied 提供。
+  NineTurnPrerequisiteResult get nineTurnPrerequisites =>
+      checkNineTurnPrerequisites(
+        profile: state.profile,
+        tribulationSatisfied: nineTurnTribulationSatisfied,
+      );
+
   /// 尝试九转突破（持久化九转状态）。
   ///
   /// - 复用 6A 的 checkNineTurnPrerequisites，不复制四条件判断；
