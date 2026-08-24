@@ -11,6 +11,7 @@ import '../data/gu_material.dart';
 import '../data/gu_recipe.dart';
 import '../data/player_profile.dart';
 import 'faction_realm.dart';
+import 'gu_power_service.dart';
 import 'material_drop_service.dart';
 import 'refining_config.dart';
 import 'refining_service.dart' as refining;
@@ -204,6 +205,25 @@ class CultivationNotifier extends StateNotifier<CultivationState> {
         }
       }
     }
+  }
+
+  /// 单只蛊虫威能（只读派生，不写 Hive）。
+  ///
+  /// 威能只由 daoTraces（力量）与蛊虫自身属性派生，与 factionRealmExp 无关。
+  GuInsectPowerResult insectPower(GuInsect insect) {
+    return getGuInsectPower(
+      insect: insect,
+      daoTraces: state.profile.daoTraces,
+    );
+  }
+
+  /// 指定流派总威能（只读派生，不写 Hive）。
+  double factionPower(Faction faction) {
+    return calculateFactionPower(
+      faction: faction,
+      daoTraces: state.profile.daoTraces,
+      insects: state.profile.guInsects,
+    );
   }
 }
 
